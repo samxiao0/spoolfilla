@@ -352,8 +352,8 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
       <div style="font-size:11px;color:var(--text3);" id="sync-queue-display">Queue: 0</div>
     </div>
     <button class="btn btn-blue" onclick="syncForce()" style="margin-top:10px;">🔄 Sync Now</button>
-    <button class="btn btn-ghost" onclick="signInWithGoogle()" style="margin-top:8px;">🔐 Sign in with Google</button>
-    <button class="btn btn-ghost" onclick="logoutCloud()" style="margin-top:8px;color:var(--red);">Sign Out</button>
+    <button class="btn btn-ghost" id="btn-signin-google" onclick="signInWithGoogle()" style="margin-top:8px;">🔐 Sign in with Google</button>
+    <button class="btn btn-ghost" id="btn-signout-google" onclick="logoutCloud()" style="margin-top:8px;color:var(--red);display:none;">Sign Out</button>
     <div id="sync-ok" class="sync-ok">✅ Synced</div>
   </div>
 
@@ -1218,6 +1218,7 @@ load();renderAll();
     let syncOkTimer = null;
     let initInProgress = false;
     let authObserverBound = false;
+    let permissionDenied = false;
     const googleProvider = new GoogleAuthProvider();
     googleProvider.setCustomParameters({ prompt: 'select_account' });
 
@@ -1244,6 +1245,13 @@ load();renderAll();
     const setUserId = (uid) => {
       const el = document.getElementById('user-id-display');
       if (el) el.textContent = uid ? `User: ${uid}` : 'Waiting for auth...';
+    };
+
+    const updateAuthButtons = (signedIn) => {
+      const signInBtn = document.getElementById('btn-signin-google');
+      const signOutBtn = document.getElementById('btn-signout-google');
+      if (signInBtn) signInBtn.style.display = signedIn ? 'none' : 'block';
+      if (signOutBtn) signOutBtn.style.display = signedIn ? 'block' : 'none';
     };
 
     const describeAuthError = (err) => {
@@ -1282,6 +1290,7 @@ load();renderAll();
       if (authEl) authEl.style.display = 'none';
       hideLoader();
       if (!userId) setCloudStatus('LOCAL', 'var(--amber)');
+      updateAuthButtons(!!userId);
     };
 
     window.hideLoaderManual = () => {
@@ -1357,6 +1366,10 @@ load();renderAll();
     };
 
     async function saveToCloud() {
+      if (permissionDenied) {
+        setCloudStatus('PERMISSION DENIED', 'var(--red)');
+        return;
+      }
       if (!db || !userId || applyingRemote) {
         pendingCloudWrite = true;
         updateSyncMetaUI();
@@ -1371,8 +1384,15 @@ load();renderAll();
         showSyncedPulse();
       } catch (err) {
         console.error('Cloud Save Error:', err);
-        setCloudStatus('OFFLINE', 'var(--red)');
-        pendingCloudWrite = true;
+        if (err?.code === 'permission-denied') {
+          permissionDenied = true;
+          pendingCloudWrite = false;
+          setCloudStatus('PERMISSION DENIED', 'var(--red)');
+          window.toast('Cloud blocked by Firestore rules for this user');
+        } else {
+          setCloudStatus('OFFLINE', 'var(--red)');
+          pendingCloudWrite = true;
+        }
         updateSyncMetaUI();
       }
     }
@@ -1414,8 +1434,15 @@ load();renderAll();
         hideLoader();
       }, (err) => {
         console.error('Sync Error:', err);
-        setCloudStatus('OFFLINE', 'var(--red)');
-        pendingCloudWrite = true;
+        if (err?.code === 'permission-denied') {
+          permissionDenied = true;
+          pendingCloudWrite = false;
+          setCloudStatus('PERMISSION DENIED', 'var(--red)');
+          window.toast('Cloud read blocked by Firestore rules for this user');
+        } else {
+          setCloudStatus('OFFLINE', 'var(--red)');
+          pendingCloudWrite = true;
+        }
         updateSyncMetaUI();
         hideLoader();
       });
@@ -1451,16 +1478,19 @@ load();renderAll();
 
     const applySignedInUser = (user) => {
       if (!user) return;
+      permissionDenied = false;
       userId = user.uid;
       if (typeof window.setStorageScope === 'function') window.setStorageScope(user.uid);
       setCloudStatus('CONNECTED', 'var(--green)');
       setUserId(user.email || user.uid);
+      updateAuthButtons(true);
       window.hideAuthScreen();
       setupSync();
       if (pendingCloudWrite) saveToCloud();
     };
 
     const applySignedOutUser = () => {
+      permissionDenied = false;
       userId = null;
       if (unsubscribeSync) {
         unsubscribeSync();
@@ -1469,6 +1499,7 @@ load();renderAll();
       if (typeof window.setStorageScope === 'function') window.setStorageScope(null);
       setUserId('Not signed in');
       setCloudStatus('SIGN IN REQUIRED', 'var(--amber)');
+      updateAuthButtons(false);
       showAuthScreen();
       hideLoader();
       updateSyncMetaUI();
