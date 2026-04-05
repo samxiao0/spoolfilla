@@ -578,6 +578,22 @@ function load(){
 }
 function save(){localStorage.setItem(activeCacheKey(),JSON.stringify(D));}
 
+function go(id,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('on'));
+  document.getElementById('p-'+id).classList.add('on');
+  if(btn) btn.classList.add('on');
+  renderAll();
+}
+function openModal(id){const el=document.getElementById(id);if(el)el.classList.add('on');}
+function closeModal(id){const el=document.getElementById(id);if(el)el.classList.remove('on');}
+function bgClose(e,id){if(e.target.classList.contains('overlay'))closeModal(id);}
+
+window.go=go;
+window.openModal=openModal;
+window.closeModal=closeModal;
+window.bgClose=bgClose;
+
 function openSpoolModal(editId){
   D.editId=editId||null;
   const sp=editId?D.spools.find(s=>s.id==editId):null;
@@ -1177,7 +1193,7 @@ load();renderAll();
 <!-- FIREBASE SDK -->
 <script type="module">
   import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-  import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+  import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -1462,18 +1478,8 @@ load();renderAll();
       try {
         if (!auth) await initCloud();
         setCloudStatus('CONNECTING', 'var(--amber)');
-        await signInWithPopup(auth, googleProvider);
+        await signInWithRedirect(auth, googleProvider);
       } catch (err) {
-        if (err?.code === 'auth/popup-blocked') {
-          try {
-            await signInWithRedirect(auth, googleProvider);
-            return;
-          } catch (redirectErr) {
-            setUserId(`Auth error: ${describeAuthError(redirectErr)}`);
-            setCloudStatus('OFFLINE', 'var(--red)');
-            return;
-          }
-        }
         setUserId(`Auth error: ${describeAuthError(err)}`);
         setCloudStatus('OFFLINE', 'var(--red)');
       }
