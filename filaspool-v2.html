@@ -1,0 +1,1435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>FilaSpool</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+:root {
+  --bg: #F4F0EB; --card: #FDFCFA; --accent: #FF6B4A; --accent-light: #FFF0ED;
+  --green: #34C27A; --green-light: #E8FAF1; --amber: #F5A623; --amber-light: #FEF6E4;
+  --red: #FF4545; --red-light: #FFECEC; --blue: #3B82F6; --blue-light: #EFF6FF;
+  --text: #1A1714; --text2: #7A746E; --text3: #BAB4AE;
+  --border: rgba(0,0,0,0.07); --sh: 0 2px 16px rgba(0,0,0,0.08); --r: 16px; --r-sm: 10px;
+}
+body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); display:flex; justify-content:center; min-height:100vh; }
+#app { width:100%; max-width:430px; min-height:100vh; padding-bottom:76px; position:relative; }
+
+/* NAV */
+.nav { position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:430px; background:var(--card); border-top:1px solid var(--border); display:flex; padding:10px 0 20px; z-index:100; }
+.nav-btn { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; background:none; border:none; cursor:pointer; font-family:'DM Sans',sans-serif; padding:4px 0; color:var(--text3); transition:color .15s; }
+.nav-btn.on { color:var(--accent); }
+.nav-icon { font-size:20px; line-height:1; }
+.nav-txt { font-size:10px; font-weight:600; letter-spacing:.3px; }
+
+/* PAGES */
+.page { display:none; padding:0 16px; padding-top:24px; }
+.page.on { display:block; }
+
+/* TOPBAR */
+.topbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; }
+.page-title { font-size:26px; font-weight:700; letter-spacing:-.5px; }
+.top-actions { display:flex; gap:8px; align-items:center; }
+.top-btn { width:40px; height:40px; border-radius:50%; background:var(--accent); color:white; border:none; font-size:22px; cursor:pointer; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(255,107,74,.35); transition:transform .12s; }
+.top-btn:active { transform:scale(.92); }
+.icon-btn { width:36px; height:36px; border-radius:50%; background:var(--card); border:1px solid var(--border); font-size:16px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+
+/* CARDS */
+.card { background:var(--card); border-radius:var(--r); box-shadow:var(--sh); padding:16px; margin-bottom:10px; }
+
+/* STATS */
+.stats-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }
+.stat { background:var(--card); border-radius:var(--r); box-shadow:var(--sh); padding:16px; }
+.stat-n { font-size:22px; font-weight:700; letter-spacing:-.5px; margin-top:6px; }
+.stat-l { font-size:12px; color:var(--text2); font-weight:500; }
+.stat-ico { font-size:18px; }
+.stat.hi { background:var(--accent); box-shadow:0 4px 16px rgba(255,107,74,.3); }
+.stat.hi .stat-n, .stat.hi .stat-l { color:white; }
+
+.sec-label { font-size:12px; font-weight:600; color:var(--text2); letter-spacing:.5px; text-transform:uppercase; margin:16px 0 10px; }
+
+/* SPOOL */
+.spool-row { display:flex; align-items:center; gap:12px; }
+.spool-color { width:42px; height:42px; border-radius:50%; flex-shrink:0; box-shadow:0 2px 8px rgba(0,0,0,.15); position:relative; }
+.spool-color::after { content:''; position:absolute; inset:30%; border-radius:50%; background:rgba(255,255,255,.4); }
+.spool-body { flex:1; min-width:0; }
+.spool-name { font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.spool-sub { font-size:12px; color:var(--text2); margin-top:1px; }
+.bar-wrap { height:5px; background:var(--bg); border-radius:99px; margin-top:7px; overflow:hidden; }
+.bar { height:100%; border-radius:99px; transition:width .4s; }
+.spool-right { text-align:right; flex-shrink:0; cursor:pointer; padding:4px; }
+.spool-g { font-size:14px; font-weight:700; }
+.tag { font-size:10px; font-weight:700; padding:2px 8px; border-radius:99px; display:inline-block; margin-top:3px; }
+.tag-ok { background:var(--green-light); color:var(--green); }
+.tag-low { background:var(--red-light); color:var(--red); }
+.tag-best { background:var(--blue-light); color:var(--blue); }
+.tag-ord { background:var(--amber-light); color:var(--amber); }
+.spool-actions { display:flex; gap:8px; margin-top:12px; border-top:1px solid var(--border); padding-top:12px; }
+.act-btn { flex:1; padding:8px 4px; border-radius:8px; border:none; font-family:'DM Sans',sans-serif; font-size:12px; font-weight:600; cursor:pointer; transition:transform .1s; text-align:center; }
+.act-btn:active { transform:scale(.94); }
+.act-edit { background:var(--bg); color:var(--text2); }
+.act-log { background:var(--green-light); color:var(--green); }
+.act-del { background:var(--red-light); color:var(--red); }
+
+/* PRINT ROW */
+.print-row { display:flex; align-items:center; gap:12px; }
+.print-ico { width:38px; height:38px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; }
+.print-body { flex:1; min-width:0; }
+.print-name { font-size:14px; font-weight:600; }
+.print-sub { font-size:12px; color:var(--text2); margin-top:1px; }
+.print-right { text-align:right; flex-shrink:0; }
+.print-cost { font-size:14px; font-weight:700; }
+.print-date { font-size:11px; color:var(--text3); margin-top:1px; }
+.stars { color:var(--amber); font-size:11px; margin-top:2px; }
+
+/* MODAL */
+.overlay { position:fixed; inset:0; background:rgba(26,23,20,.45); display:flex; align-items:flex-end; justify-content:center; z-index:200; opacity:0; pointer-events:none; transition:opacity .2s; }
+.overlay.on { opacity:1; pointer-events:all; }
+.sheet { background:var(--card); border-radius:24px 24px 0 0; padding:20px 16px 36px; width:100%; max-width:430px; transform:translateY(100%); transition:transform .28s cubic-bezier(.32,.72,0,1); max-height:88vh; overflow-y:auto; }
+.overlay.on .sheet { transform:translateY(0); }
+.handle { width:36px; height:4px; background:var(--text3); border-radius:99px; margin:0 auto 18px; opacity:.4; }
+.sheet-title { font-size:18px; font-weight:700; margin-bottom:18px; }
+
+/* FORM */
+.field { margin-bottom:12px; }
+.lbl { font-size:12px; font-weight:600; color:var(--text2); margin-bottom:5px; display:block; letter-spacing:.3px; }
+.inp { width:100%; background:var(--bg); border:1.5px solid transparent; border-radius:var(--r-sm); padding:11px 13px; font-family:'DM Sans',sans-serif; font-size:15px; font-weight:500; color:var(--text); outline:none; transition:border .15s; }
+.inp:focus { border-color:var(--accent); }
+.inp::placeholder { color:var(--text3); }
+.two { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.three { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+.colors { display:flex; gap:8px; flex-wrap:wrap; margin-top:2px; }
+.col-dot { width:30px; height:30px; border-radius:50%; cursor:pointer; border:2.5px solid transparent; transition:transform .12s,border .12s; }
+.col-dot.sel { border-color:var(--text); transform:scale(1.15); }
+
+/* BUTTONS */
+.btn { width:100%; padding:13px; border-radius:var(--r); border:none; font-family:'DM Sans',sans-serif; font-size:15px; font-weight:700; cursor:pointer; transition:transform .1s; margin-top:8px; }
+.btn:active { transform:scale(.97); }
+.btn-pri { background:var(--accent); color:white; box-shadow:0 4px 14px rgba(255,107,74,.3); }
+.btn-ghost { background:var(--bg); color:var(--text2); }
+.btn-blue { background:var(--blue); color:white; box-shadow:0 4px 14px rgba(59,130,246,.25); }
+.btn-green { background:var(--green); color:white; box-shadow:0 4px 14px rgba(52,194,122,.25); }
+
+/* SETTINGS */
+.setting { display:flex; justify-content:space-between; align-items:center; padding:14px 0; border-bottom:1px solid var(--border); }
+.setting:last-child { border:none; }
+.set-lbl { font-size:14px; font-weight:600; }
+.set-sub { font-size:12px; color:var(--text2); margin-top:1px; }
+.set-ctrl { background:var(--bg); border:1.5px solid transparent; border-radius:8px; padding:6px 10px; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600; color:var(--text); outline:none; cursor:pointer; }
+.set-ctrl:focus { border-color:var(--accent); }
+
+/* SEARCH */
+.search { width:100%; background:var(--card); border:1.5px solid var(--border); border-radius:12px; padding:11px 14px; font-family:'DM Sans',sans-serif; font-size:14px; color:var(--text); outline:none; margin-bottom:12px; }
+.search:focus { border-color:var(--accent); }
+.search::placeholder { color:var(--text3); }
+
+/* ESTIMATOR RESULT */
+.est-result { border-radius:var(--r); padding:16px; margin-top:12px; text-align:center; }
+.est-big { font-size:28px; font-weight:700; margin-bottom:4px; }
+.est-sub { font-size:13px; font-weight:500; }
+
+/* PRICE HISTORY */
+.ph-row { display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--border); }
+.ph-row:last-child { border:none; }
+.ph-date { font-size:12px; color:var(--text2); }
+.ph-price { font-size:15px; font-weight:700; }
+.ph-cpg { font-size:12px; color:var(--text3); }
+
+/* GST SUMMARY */
+.gst-row { display:flex; justify-content:space-between; padding:8px 0; }
+.gst-lbl { font-size:13px; color:var(--text2); }
+.gst-val { font-size:13px; font-weight:700; }
+
+/* MAT BAR */
+.mat-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+.mat-dot { width:8px; height:8px; border-radius:99px; flex-shrink:0; }
+.mat-label { font-size:13px; font-weight:500; flex:1; }
+.mat-track { flex:2; height:6px; background:var(--bg); border-radius:99px; overflow:hidden; }
+.mat-fill { height:100%; border-radius:99px; }
+.mat-pct { font-size:12px; font-weight:600; color:var(--text2); width:32px; text-align:right; }
+
+/* SORT ROW */
+.sort-row { display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; }
+.sort-chip { font-size:12px; font-weight:600; padding:5px 12px; border-radius:99px; border:1.5px solid var(--border); background:var(--card); color:var(--text2); cursor:pointer; }
+.sort-chip.on { background:var(--accent); color:white; border-color:var(--accent); }
+
+/* QUICK TOOLS on DASHBOARD */
+.tools-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }
+.tool-card { background:var(--card); border-radius:var(--r); box-shadow:var(--sh); padding:16px; cursor:pointer; transition:transform .12s; border:1.5px solid transparent; }
+.tool-card:active { transform:scale(.97); }
+.tool-card:hover { border-color:var(--accent); }
+.tool-ico { font-size:24px; margin-bottom:8px; }
+.tool-name { font-size:13px; font-weight:700; }
+.tool-desc { font-size:11px; color:var(--text2); margin-top:2px; }
+
+/* EMPTY */
+.empty { text-align:center; padding:48px 20px; }
+.empty-e { font-size:40px; margin-bottom:10px; }
+.empty-t { font-size:15px; font-weight:600; color:var(--text2); }
+.empty-s { font-size:13px; color:var(--text3); margin-top:4px; }
+
+/* TOAST */
+.toast { position:fixed; top:20px; left:50%; transform:translateX(-50%) translateY(-70px); background:var(--text); color:white; padding:10px 18px; border-radius:99px; font-size:13px; font-weight:600; z-index:300; transition:transform .25s cubic-bezier(.32,.72,0,1); white-space:nowrap; box-shadow:0 4px 20px rgba(0,0,0,.2); }
+.toast.show { transform:translateX(-50%) translateY(0); }
+
+/* SHARE CANVAS (hidden) */
+#share-canvas { display:none; }
+
+/* DIVIDER */
+.divider { height:1px; background:var(--border); margin:4px 0 12px; }
+
+/* BAMBU BANNER */
+.bambu-card { background:linear-gradient(135deg,#1A1714,#2C2825); border-radius:var(--r); padding:16px; margin-bottom:10px; }
+.bambu-title { color:white; font-size:14px; font-weight:700; margin-bottom:4px; }
+.bambu-sub { color:rgba(255,255,255,.5); font-size:12px; line-height:1.5; }
+.bambu-tag { display:inline-block; background:rgba(255,107,74,.2); color:var(--accent); font-size:10px; font-weight:700; padding:3px 10px; border-radius:99px; margin-top:8px; border:1px solid rgba(255,107,74,.3); }
+
+/* SYNC SUCCESS CHIP */
+.sync-ok { display:inline-flex; align-items:center; gap:6px; margin-top:10px; background:var(--green-light); color:var(--green); border:1px solid rgba(52,194,122,.35); border-radius:99px; padding:5px 10px; font-size:11px; font-weight:700; opacity:0; transform:translateY(4px) scale(.96); transition:opacity .2s ease, transform .2s ease; pointer-events:none; }
+.sync-ok.show { opacity:1; transform:translateY(0) scale(1); }
+
+/* CLOUD LOADER */
+#loading-overlay { position:fixed; inset:0; background:var(--bg); z-index:999; display:flex; flex-direction:column; align-items:center; justify-content:center; transition:opacity .35s; padding:20px; text-align:center; }
+.spinner { width:40px; height:40px; border:4px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 1s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="loading-overlay">
+  <div class="spinner"></div>
+  <p id="loading-status" style="margin-top:14px;font-size:13px;font-weight:600;color:var(--text2);">Connecting to Cloud...</p>
+  <div id="loading-actions" style="display:none;margin-top:12px;">
+    <button class="btn btn-ghost" onclick="hideLoaderManual()" style="padding:10px 14px;font-size:12px;">Skip Cloud & Load Local</button>
+  </div>
+</div>
+<div id="app">
+
+<!-- DASHBOARD -->
+<div class="page on" id="p-dash">
+  <div class="topbar">
+    <div class="page-title">Dashboard</div>
+    <div class="top-actions">
+      <button class="icon-btn" onclick="openShareModal()" title="Share Snapshot">📤</button>
+      <button class="top-btn" onclick="openLogModal()">+</button>
+    </div>
+  </div>
+  <div class="stats-row" id="s-grid"></div>
+  <div class="card" id="s-mat"></div>
+  <div class="sec-label">Quick Tools</div>
+  <div class="tools-grid">
+    <div class="tool-card" onclick="openModal('m-est')">
+      <div class="tool-ico">🔮</div>
+      <div class="tool-name">Pre-Print Estimator</div>
+      <div class="tool-desc">Check if you have enough filament</div>
+    </div>
+    <div class="tool-card" onclick="showCheapest()">
+      <div class="tool-ico">💡</div>
+      <div class="tool-name">Best Value Spool</div>
+      <div class="tool-desc">Cheapest per gram right now</div>
+    </div>
+    <div class="tool-card" onclick="openModal('m-gst')">
+      <div class="tool-ico">🧾</div>
+      <div class="tool-name">GST Tracker</div>
+      <div class="tool-desc">Tax breakdown for business</div>
+    </div>
+    <div class="tool-card" onclick="go('hist',document.querySelectorAll('.nav-btn')[2]);setTimeout(()=>exportPDF(),200)">
+      <div class="tool-ico">📄</div>
+      <div class="tool-name">Export PDF Report</div>
+      <div class="tool-desc">Print history for clients</div>
+    </div>
+  </div>
+  <div class="sec-label">Recent Prints</div>
+  <div id="s-recent"></div>
+</div>
+
+<!-- SPOOLS -->
+<div class="page" id="p-spools">
+  <div class="topbar">
+    <div class="page-title">My Spools</div>
+    <div class="top-actions">
+      <button class="icon-btn" onclick="openPriceHistory()" title="Price History">📈</button>
+      <button class="top-btn" onclick="openSpoolModal()">+</button>
+    </div>
+  </div>
+  <input class="search" placeholder="Search spools..." oninput="renderSpools(this.value)" id="spool-q">
+  <div class="sort-row">
+    <div class="sort-chip on" onclick="setSort('name',this)">Name</div>
+    <div class="sort-chip" onclick="setSort('rem',this)">Remaining</div>
+    <div class="sort-chip" onclick="setSort('cpg',this)">₹/gram ↑</div>
+    <div class="sort-chip" onclick="setSort('cost',this)">Total Cost</div>
+  </div>
+  <div id="s-spools"></div>
+</div>
+
+<!-- HISTORY -->
+<div class="page" id="p-hist">
+  <div class="topbar">
+    <div class="page-title">Print History</div>
+    <div class="top-actions">
+      <button class="icon-btn" onclick="exportPDF()" title="Export PDF">📄</button>
+      <button class="top-btn" onclick="openLogModal()">+</button>
+    </div>
+  </div>
+  <div id="s-hist"></div>
+</div>
+
+<!-- SHOPPING -->
+<div class="page" id="p-shop">
+  <div class="topbar"><div class="page-title">Shopping</div></div>
+  <div class="card" style="background:var(--accent);box-shadow:0 4px 16px rgba(255,107,74,.3);margin-bottom:12px;">
+    <div style="color:white;font-size:13px;font-weight:600;">Auto-populated from low-stock spools. Mark ordered → received to restock.</div>
+  </div>
+  <div id="s-shop"></div>
+</div>
+
+<!-- SETTINGS -->
+<div class="page" id="p-set">
+  <div class="topbar"><div class="page-title">Settings</div></div>
+  <div class="card">
+    <div class="setting">
+      <div><div class="set-lbl">Low-Stock Threshold</div><div class="set-sub">Alert when below (g)</div></div>
+      <input class="set-ctrl" type="number" id="c-thresh" style="width:72px;text-align:center;" onchange="setSetting('threshold',+this.value)">
+    </div>
+    <div class="setting">
+      <div><div class="set-lbl">Currency</div></div>
+      <select class="set-ctrl" id="c-cur" onchange="setSetting('currency',this.value)">
+        <option value="₹">₹ INR</option><option value="$">$ USD</option><option value="€">€ EUR</option><option value="£">£ GBP</option>
+      </select>
+    </div>
+    <div class="setting">
+      <div><div class="set-lbl">GST Rate</div><div class="set-sub">Applied to spool costs</div></div>
+      <select class="set-ctrl" id="c-gst" onchange="setSetting('gstRate',+this.value)">
+        <option value="0">None</option><option value="5">5%</option><option value="12">12%</option><option value="18">18%</option><option value="28">28%</option>
+      </select>
+    </div>
+    <div class="setting">
+      <div><div class="set-lbl">Default Diameter</div></div>
+      <select class="set-ctrl" id="c-diam" onchange="setSetting('diameter',this.value)">
+        <option value="1.75">1.75 mm</option><option value="2.85">2.85 mm</option>
+      </select>
+    </div>
+    <div class="setting" style="border:none;">
+      <div><div class="set-lbl">Total Spools</div></div>
+      <div style="font-size:14px;font-weight:700;color:var(--accent);" id="c-count">0</div>
+    </div>
+  </div>
+
+  <div class="bambu-card">
+    <div class="bambu-title">🖨️ Bambu Lab A1 Mini</div>
+    <div class="bambu-sub">Direct printer connection uses MQTT over LAN — browsers can't connect directly due to security restrictions. Bambu's cloud API is also unofficial. Full integration needs a local bridge app.</div>
+    <div class="bambu-tag">Coming when Bambu opens their API</div>
+  </div>
+
+  <div class="card" style="margin-top:4px;">
+    <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:10px;">Cloud Sync</div>
+    <div class="setting">
+      <div><div class="set-lbl">Status</div><div class="set-sub" id="user-id-display">Waiting for auth...</div></div>
+      <div style="font-size:12px;font-weight:700;color:var(--text3);" id="cloud-status-badge">OFFLINE</div>
+    </div>
+    <div class="setting" style="padding-top:10px;">
+      <div><div class="set-lbl">Last Synced</div><div class="set-sub" id="last-sync-display">Never</div></div>
+      <div style="font-size:11px;color:var(--text3);" id="sync-queue-display">Queue: 0</div>
+    </div>
+    <button class="btn btn-blue" onclick="syncForce()" style="margin-top:10px;">🔄 Sync Now</button>
+    <div id="sync-ok" class="sync-ok">✅ Synced</div>
+  </div>
+
+  <div class="card" style="margin-top:4px;">
+    <div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:10px;">Data Management</div>
+    <button class="btn btn-green" onclick="exportJSON()" style="margin-top:0;">📦 Export All Data (JSON)</button>
+    <label class="btn btn-ghost" style="display:block;text-align:center;cursor:pointer;margin-top:8px;">
+      📥 Import JSON Backup <input type="file" accept=".json" onchange="importJSON(this)" style="display:none;">
+    </label>
+    <button class="btn btn-ghost" onclick="clearAll()" style="color:var(--red);">Clear All Data</button>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<nav class="nav">
+  <button class="nav-btn on" onclick="go('dash',this)"><span class="nav-icon">📊</span><span class="nav-txt">Dashboard</span></button>
+  <button class="nav-btn" onclick="go('spools',this)"><span class="nav-icon">🎡</span><span class="nav-txt">Spools</span></button>
+  <button class="nav-btn" onclick="go('hist',this)"><span class="nav-icon">📋</span><span class="nav-txt">History</span></button>
+  <button class="nav-btn" onclick="go('shop',this)"><span class="nav-icon">🛒</span><span class="nav-txt">Shopping</span></button>
+  <button class="nav-btn" onclick="go('set',this)"><span class="nav-icon">⚙️</span><span class="nav-txt">Settings</span></button>
+</nav>
+
+<!-- ADD SPOOL MODAL -->
+<div class="overlay" id="m-spool" onclick="bgClose(event,'m-spool')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="sheet-title" id="m-spool-title">Add Spool</div>
+    <div class="field"><label class="lbl">Name</label><input class="inp" id="f-name" placeholder="e.g. Galaxy Black PLA"></div>
+    <div class="two">
+      <div class="field"><label class="lbl">Material</label>
+        <select class="inp" id="f-mat"><option>PLA</option><option>PETG</option><option>ABS</option><option>TPU</option><option>ASA</option><option>Nylon</option></select>
+      </div>
+      <div class="field"><label class="lbl">Brand</label><input class="inp" id="f-brand" placeholder="Bambu Lab"></div>
+    </div>
+    <div class="two">
+      <div class="field"><label class="lbl">Total (g)</label><input class="inp" type="number" id="f-total" placeholder="1000"></div>
+      <div class="field"><label class="lbl">Remaining (g)</label><input class="inp" type="number" id="f-rem" placeholder="1000"></div>
+    </div>
+    <div class="two">
+      <div class="field"><label class="lbl">Cost paid (incl. GST)</label><input class="inp" type="number" id="f-cost" placeholder="1200"></div>
+      <div class="field"><label class="lbl">Diameter</label>
+        <select class="inp" id="f-diam"><option value="1.75">1.75 mm</option><option value="2.85">2.85 mm</option></select>
+      </div>
+    </div>
+    <div class="field"><label class="lbl">Purchase Date</label><input class="inp" type="date" id="f-date"></div>
+    <div class="field"><label class="lbl">Print Temp (°C)</label>
+      <div class="two">
+        <input class="inp" type="number" id="f-temp-noz" placeholder="Nozzle e.g. 215">
+        <input class="inp" type="number" id="f-temp-bed" placeholder="Bed e.g. 60">
+      </div>
+    </div>
+    <div class="field"><label class="lbl">Color</label><div class="colors" id="color-row"></div></div>
+    <button class="btn btn-pri" onclick="saveSpool()">Save Spool</button>
+    <button class="btn btn-ghost" onclick="closeModal('m-spool')">Cancel</button>
+  </div>
+</div>
+
+<!-- LOG PRINT MODAL -->
+<div class="overlay" id="m-log" onclick="bgClose(event,'m-log')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="sheet-title">Log Print</div>
+    <div class="field"><label class="lbl">Print Name</label><input class="inp" id="l-name" placeholder="e.g. Benchy #3"></div>
+    <div class="field"><label class="lbl">Spool Used</label><select class="inp" id="l-spool"></select></div>
+    <div class="two">
+      <div class="field"><label class="lbl">Filament (g)</label><input class="inp" type="number" id="l-grams" placeholder="45"></div>
+      <div class="field"><label class="lbl">Time (hrs)</label><input class="inp" type="number" step="0.5" id="l-hrs" placeholder="2.5"></div>
+    </div>
+    <div class="two">
+      <div class="field"><label class="lbl">Rating</label>
+        <select class="inp" id="l-rate"><option value="5">⭐⭐⭐⭐⭐</option><option value="4">⭐⭐⭐⭐</option><option value="3">⭐⭐⭐</option><option value="2">⭐⭐</option><option value="1">⭐</option></select>
+      </div>
+      <div class="field"><label class="lbl">Result</label>
+        <select class="inp" id="l-pass"><option value="pass">✅ Pass</option><option value="fail">❌ Fail</option></select>
+      </div>
+    </div>
+    <div class="field"><label class="lbl">Notes</label><input class="inp" id="l-notes" placeholder="Observations..."></div>
+    <button class="btn btn-pri" onclick="saveLog()">Log Print</button>
+    <button class="btn btn-ghost" onclick="closeModal('m-log')">Cancel</button>
+  </div>
+</div>
+
+<!-- PRE-PRINT ESTIMATOR MODAL -->
+<div class="overlay" id="m-est" onclick="bgClose(event,'m-est')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="sheet-title">🔮 Pre-Print Estimator</div>
+    <div class="field"><label class="lbl">Model Weight (g)</label><input class="inp" type="number" id="e-weight" placeholder="e.g. 45" oninput="runEstimate()"></div>
+    <div class="field"><label class="lbl">Support / Waste factor (%)</label>
+      <select class="inp" id="e-waste" onchange="runEstimate()">
+        <option value="0">0% — No supports</option>
+        <option value="10" selected>10% — Light supports</option>
+        <option value="20">20% — Heavy supports</option>
+        <option value="30">30% — Rafts + supports</option>
+      </select>
+    </div>
+    <div class="field"><label class="lbl">Pick Spool (or leave for recommendations)</label>
+      <select class="inp" id="e-spool" onchange="runEstimate()">
+        <option value="">— Show all recommendations —</option>
+      </select>
+    </div>
+    <div id="est-output"></div>
+    <button class="btn btn-ghost" onclick="closeModal('m-est')">Close</button>
+  </div>
+</div>
+
+<!-- GST TRACKER MODAL -->
+<div class="overlay" id="m-gst" onclick="bgClose(event,'m-gst')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="sheet-title">🧾 GST Tracker</div>
+    <div id="gst-output"></div>
+    <button class="btn btn-ghost" onclick="closeModal('m-gst')">Close</button>
+  </div>
+</div>
+
+<!-- PRICE HISTORY MODAL -->
+<div class="overlay" id="m-ph" onclick="bgClose(event,'m-ph')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="sheet-title">📈 Price History</div>
+    <div class="field"><label class="lbl">Filter by Material</label>
+      <select class="inp" id="ph-mat" onchange="renderPriceHistory()">
+        <option value="">All Materials</option>
+        <option>PLA</option><option>PETG</option><option>ABS</option><option>TPU</option><option>ASA</option><option>Nylon</option>
+      </select>
+    </div>
+    <div id="ph-output"></div>
+    <button class="btn btn-ghost" onclick="closeModal('m-ph')">Close</button>
+  </div>
+</div>
+
+<!-- SHARE MODAL -->
+<div class="overlay" id="m-share" onclick="bgClose(event,'m-share')">
+  <div class="sheet">
+    <div class="handle"></div>
+    <div class="sheet-title">📤 Share Snapshot</div>
+    <canvas id="share-canvas" width="800" height="600" style="width:100%;border-radius:12px;margin-bottom:12px;display:block;"></canvas>
+    <button class="btn btn-pri" onclick="downloadSnapshot()">Download Image</button>
+    <button class="btn btn-ghost" onclick="closeModal('m-share')">Close</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+</div>
+
+<script>
+const COLS=['#E74C3C','#E67E22','#F1C40F','#27AE60','#16A085','#2980B9','#8E44AD','#2C3E50','#E91E63','#FF5722','#795548','#BDC3C7'];
+const MAT_COL={PLA:'#2980B9',PETG:'#27AE60',ABS:'#E67E22',TPU:'#8E44AD',ASA:'#E74C3C',Nylon:'#16A085'};
+const cur=()=>D.settings.currency;
+const gstRate=()=>D.settings.gstRate||0;
+
+let D={spools:[],prints:[],settings:{threshold:200,currency:'₹',diameter:'1.75',gstRate:18},editId:null};
+let sortKey='name';
+
+function nowTs(){return Date.now();}
+function ensureSyncMeta(){
+  if(!D._sync||typeof D._sync!=='object')D._sync={};
+  if(!D._sync.spoolTombstones||typeof D._sync.spoolTombstones!=='object')D._sync.spoolTombstones={};
+  if(!D._sync.printTombstones||typeof D._sync.printTombstones!=='object')D._sync.printTombstones={};
+  if(!D._sync.settingsUpdatedAt)D._sync.settingsUpdatedAt=0;
+}
+function touchSpool(sp){if(sp)sp._updatedAt=nowTs();}
+function touchPrint(pr){if(pr)pr._updatedAt=nowTs();}
+function markSpoolDeleted(id){ensureSyncMeta();D._sync.spoolTombstones[String(id)]=nowTs();}
+function markPrintDeleted(id){ensureSyncMeta();D._sync.printTombstones[String(id)]=nowTs();}
+
+function load(){
+  try{const s=localStorage.getItem('fs4');if(s)D=JSON.parse(s);}catch(e){}
+  ensureSyncMeta();
+  D.spools.forEach(s=>{if(!s._updatedAt)s._updatedAt=0;});
+  D.prints.forEach(p=>{if(!p._updatedAt)p._updatedAt=0;});
+  if(!D.settings.gstRate&&D.settings.gstRate!==0)D.settings.gstRate=18;
+  if(!D.spools.length)seed();
+}
+function save(){localStorage.setItem('fs4',JSON.stringify(D));}
+
+function seed(){
+  const ts=nowTs();
+  D.spools=[
+    {id:1,name:'Galaxy Black PLA',mat:'PLA',brand:'Bambu Lab',total:1000,rem:740,cost:1199,diam:'1.75',color:'#2C3E50',date:'2025-01-10',tempNoz:215,tempBed:60,_updatedAt:ts},
+    {id:2,name:'Sunrise Orange PETG',mat:'PETG',brand:'eSUN',total:1000,rem:160,cost:899,diam:'1.75',color:'#E67E22',date:'2025-01-15',tempNoz:235,tempBed:70,_updatedAt:ts},
+    {id:3,name:'Ocean Blue PLA',mat:'PLA',brand:'Bambu Lab',total:1000,rem:820,cost:1199,diam:'1.75',color:'#2980B9',date:'2025-02-01',tempNoz:215,tempBed:60,_updatedAt:ts},
+    {id:4,name:'Ruby Red ABS',mat:'ABS',brand:'Polymaker',total:750,rem:75,cost:1499,diam:'1.75',color:'#E74C3C',date:'2025-02-10',tempNoz:240,tempBed:100,_updatedAt:ts},
+    {id:5,name:'Neon Green TPU',mat:'TPU',brand:'Sunlu',total:500,rem:340,cost:799,diam:'1.75',color:'#27AE60',date:'2025-03-01',tempNoz:225,tempBed:30,_updatedAt:ts},
+  ];
+  D.prints=[
+    {id:1,name:'Phone Stand v2',sid:1,grams:28,hrs:1.5,rate:5,pass:'pass',notes:'Perfect',date:'2025-03-15',_updatedAt:ts},
+    {id:2,name:'Mechanical Iris Box',sid:3,grams:112,hrs:6,rate:4,pass:'pass',notes:'Minor stringing',date:'2025-03-18',_updatedAt:ts},
+    {id:3,name:'Flexi Dragon',sid:5,grams:42,hrs:3,rate:5,pass:'pass',notes:'Beautiful!',date:'2025-04-01',_updatedAt:ts},
+    {id:4,name:'ABS Bracket',sid:4,grams:35,hrs:2,rate:2,pass:'fail',notes:'Delamination',date:'2025-03-28',_updatedAt:ts},
+  ];
+  ensureSyncMeta();
+  D._sync.settingsUpdatedAt=ts;
+  save();
+}
+
+function go(id,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('on'));
+  document.getElementById('p-'+id).classList.add('on');
+  btn.classList.add('on');
+  renderAll();
+}
+
+function openModal(id){document.getElementById(id).classList.add('on');}
+function closeModal(id){document.getElementById(id).classList.remove('on');}
+function bgClose(e,id){if(e.target.classList.contains('overlay'))closeModal(id);}
+
+let selCol='#2C3E50';
+function openSpoolModal(editId){
+  D.editId=editId||null;
+  const sp=editId?D.spools.find(s=>s.id==editId):null;
+  document.getElementById('m-spool-title').textContent=editId?'Edit Spool':'Add Spool';
+  document.getElementById('f-name').value=sp?.name||'';
+  document.getElementById('f-mat').value=sp?.mat||'PLA';
+  document.getElementById('f-brand').value=sp?.brand||'';
+  document.getElementById('f-total').value=sp?.total||'';
+  document.getElementById('f-rem').value=sp?.rem||'';
+  document.getElementById('f-cost').value=sp?.cost||'';
+  document.getElementById('f-diam').value=sp?.diam||D.settings.diameter;
+  document.getElementById('f-date').value=sp?.date||new Date().toISOString().slice(0,10);
+  document.getElementById('f-temp-noz').value=sp?.tempNoz||'';
+  document.getElementById('f-temp-bed').value=sp?.tempBed||'';
+  selCol=sp?.color||'#2C3E50';
+  document.getElementById('color-row').innerHTML=COLS.map(c=>`<div class="col-dot${c===selCol?' sel':''}" style="background:${c}" onclick="pickCol('${c}',this)"></div>`).join('');
+  openModal('m-spool');
+}
+function pickCol(c,el){selCol=c;document.querySelectorAll('.col-dot').forEach(d=>d.classList.remove('sel'));el.classList.add('sel');}
+
+function saveSpool(){
+  const name=document.getElementById('f-name').value.trim();
+  const total=+document.getElementById('f-total').value;
+  if(!name||!total){toast('Fill in required fields');return;}
+  const data={name,mat:document.getElementById('f-mat').value,brand:document.getElementById('f-brand').value,total,rem:+document.getElementById('f-rem').value||total,cost:+document.getElementById('f-cost').value||0,diam:document.getElementById('f-diam').value,color:selCol,date:document.getElementById('f-date').value,tempNoz:+document.getElementById('f-temp-noz').value||0,tempBed:+document.getElementById('f-temp-bed').value||0};
+  if(D.editId){const ex=D.spools.find(s=>s.id==D.editId);Object.assign(ex,data);touchSpool(ex);toast('Spool updated ✓');}
+  else{D.spools.push({id:Date.now(),...data,_updatedAt:nowTs()});toast('Spool added ✓');}
+  save();closeModal('m-spool');renderAll();
+}
+function deleteSpool(id){if(!confirm('Delete this spool?'))return;markSpoolDeleted(id);D.spools=D.spools.filter(s=>s.id!==id);save();renderAll();toast('Deleted');}
+
+function openLogModal(sid){
+  const sel=document.getElementById('l-spool');
+  sel.innerHTML=D.spools.map(s=>`<option value="${s.id}">${s.name}</option>`).join('');
+  if(sid)sel.value=sid;
+  ['l-name','l-notes'].forEach(i=>document.getElementById(i).value='');
+  document.getElementById('l-grams').value='';document.getElementById('l-hrs').value='';
+  openModal('m-log');
+}
+function saveLog(){
+  const name=document.getElementById('l-name').value.trim();
+  const grams=+document.getElementById('l-grams').value;
+  const sid=+document.getElementById('l-spool').value;
+  if(!name||!grams){toast('Fill in required fields');return;}
+  const sp=D.spools.find(s=>s.id===sid);
+  if(sp){sp.rem=Math.max(0,sp.rem-grams);touchSpool(sp);} 
+  D.prints.unshift({id:Date.now(),name,sid,grams,hrs:+document.getElementById('l-hrs').value||0,rate:+document.getElementById('l-rate').value,pass:document.getElementById('l-pass').value,notes:document.getElementById('l-notes').value.trim(),date:new Date().toISOString().slice(0,10),_updatedAt:nowTs()});
+  save();closeModal('m-log');toast('Print logged ✓');renderAll();
+}
+function deleteLog(id){markPrintDeleted(id);D.prints=D.prints.filter(p=>p.id!==id);save();renderAll();toast('Removed');}
+
+function setSetting(k,v){D.settings[k]=v;ensureSyncMeta();D._sync.settingsUpdatedAt=nowTs();save();renderAll();}
+function clearAll(){if(!confirm('Delete all data?'))return;D.spools.forEach(s=>markSpoolDeleted(s.id));D.prints.forEach(p=>markPrintDeleted(p.id));D.spools=[];D.prints=[];save();renderAll();toast('Data cleared');}
+
+// SORT
+function setSort(key,el){
+  sortKey=key;
+  document.querySelectorAll('.sort-chip').forEach(c=>c.classList.remove('on'));
+  el.classList.add('on');
+  renderSpools();
+}
+function sortSpools(list){
+  if(sortKey==='rem')return[...list].sort((a,b)=>b.rem-a.rem);
+  if(sortKey==='cpg')return[...list].sort((a,b)=>(a.cost/a.total)-(b.cost/b.total));
+  if(sortKey==='cost')return[...list].sort((a,b)=>b.cost-a.cost);
+  return[...list].sort((a,b)=>a.name.localeCompare(b.name));
+}
+
+// CHEAPEST
+function showCheapest(){
+  if(!D.spools.length){toast('No spools added yet');return;}
+  const best=[...D.spools].sort((a,b)=>(a.cost/a.total)-(b.cost/b.total))[0];
+  toast(`💡 Best value: ${best.name} @ ${cur()}${(best.cost/best.total).toFixed(2)}/g`);
+}
+
+function cpg(s){return(s.cost/s.total).toFixed(2);}
+function low(s){return s.rem<=D.settings.threshold;}
+function barColor(pct){return pct>50?'#34C27A':pct>25?'#F5A623':'#FF4545';}
+function printCost(p){const sp=D.spools.find(s=>s.id===p.sid);return sp?Math.round((sp.cost/sp.total)*p.grams):0;}
+
+// ESTIMATOR
+function openEstimator(){
+  const sel=document.getElementById('e-spool');
+  sel.innerHTML='<option value="">— Show all recommendations —</option>'+D.spools.map(s=>`<option value="${s.id}">${s.name} (${Math.round(s.rem)}g left)</option>`).join('');
+  document.getElementById('e-weight').value='';
+  document.getElementById('est-output').innerHTML='';
+  openModal('m-est');
+}
+
+function runEstimate(){
+  const wt=+document.getElementById('e-weight').value;
+  const waste=+document.getElementById('e-waste').value;
+  const sid=+document.getElementById('e-spool').value;
+  if(!wt){document.getElementById('est-output').innerHTML='';return;}
+  const needed=Math.ceil(wt*(1+waste/100));
+  let html='';
+  if(sid){
+    const sp=D.spools.find(s=>s.id===sid);
+    if(!sp)return;
+    const ok=sp.rem>=needed;
+    const cost=((sp.cost/sp.total)*needed).toFixed(0);
+    html=`<div class="est-result" style="background:${ok?'var(--green-light)':'var(--red-light)'};">
+      <div class="est-big" style="color:${ok?'var(--green)':'var(--red)'};">${ok?'✅ You\'re good!':'❌ Not enough'}</div>
+      <div class="est-sub" style="color:${ok?'var(--green)':'var(--red)'};">Need <strong>${needed}g</strong> · Spool has <strong>${Math.round(sp.rem)}g</strong><br>Est. cost: <strong>${cur()}${cost}</strong></div>
+      ${sp.tempNoz?`<div style="font-size:12px;margin-top:8px;color:var(--text2);">🌡️ ${sp.tempNoz}°C nozzle · ${sp.tempBed}°C bed</div>`:''}
+    </div>`;
+  } else {
+    const capable=D.spools.filter(s=>s.rem>=needed).sort((a,b)=>(a.cost/a.total)-(b.cost/b.total));
+    if(!capable.length){
+      html=`<div class="est-result" style="background:var(--red-light);"><div class="est-big" style="color:var(--red);">❌ No spool has ${needed}g</div><div class="est-sub" style="color:var(--red);">Check your shopping list</div></div>`;
+    } else {
+      html=`<div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:8px;">Need ${needed}g · ${capable.length} spool${capable.length>1?'s':''} can handle it:</div>`
+        +capable.slice(0,4).map((s,i)=>{
+          const cost=((s.cost/s.total)*needed).toFixed(0);
+          return `<div class="card" style="margin-bottom:8px;padding:12px;${i===0?'border:2px solid var(--green);':''}">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="width:28px;height:28px;border-radius:50%;background:${s.color};flex-shrink:0;"></div>
+              <div style="flex:1;">
+                <div style="font-size:13px;font-weight:700;">${i===0?'🏆 ':''} ${s.name}</div>
+                <div style="font-size:11px;color:var(--text2);">${Math.round(s.rem)}g left · ${cur()}${(s.cost/s.total).toFixed(2)}/g</div>
+              </div>
+              <div style="font-size:14px;font-weight:700;color:var(--green);">${cur()}${cost}</div>
+            </div>
+          </div>`;
+        }).join('');
+    }
+  }
+  document.getElementById('est-output').innerHTML=html;
+}
+
+// GST
+function renderGST(){
+  const rate=gstRate();
+  const totalCost=D.spools.reduce((a,s)=>a+s.cost,0);
+  const gstAmt=totalCost*(rate/(100+rate));
+  const base=totalCost-gstAmt;
+  const byMat={};
+  D.spools.forEach(s=>{byMat[s.mat]=(byMat[s.mat]||0)+s.cost;});
+  let html=`<div style="font-size:13px;font-weight:600;color:var(--text2);margin-bottom:12px;">Based on ${D.settings.gstRate}% GST rate</div>`;
+  html+=`<div class="card" style="margin-bottom:12px;">
+    <div class="gst-row"><span class="gst-lbl">Base Amount (excl. GST)</span><span class="gst-val">${cur()}${Math.round(base).toLocaleString('en-IN')}</span></div>
+    <div class="gst-row"><span class="gst-lbl">GST (${rate}%)</span><span class="gst-val" style="color:var(--accent);">${cur()}${Math.round(gstAmt).toLocaleString('en-IN')}</span></div>
+    <div class="divider"></div>
+    <div class="gst-row"><span class="gst-lbl" style="font-weight:700;">Total Paid</span><span class="gst-val">${cur()}${Math.round(totalCost).toLocaleString('en-IN')}</span></div>
+  </div>`;
+  html+=`<div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;">By Material</div>`;
+  Object.entries(byMat).forEach(([m,v])=>{
+    const g=v*(rate/(100+rate));
+    html+=`<div class="card" style="padding:12px;margin-bottom:8px;"><div style="display:flex;justify-content:space-between;align-items:center;"><div><div style="font-size:13px;font-weight:700;">${m}</div><div style="font-size:11px;color:var(--text2);">GST: ${cur()}${Math.round(g).toLocaleString('en-IN')}</div></div><div style="text-align:right;"><div style="font-size:14px;font-weight:700;">${cur()}${Math.round(v).toLocaleString('en-IN')}</div></div></div></div>`;
+  });
+  document.getElementById('gst-output').innerHTML=html;
+}
+
+// PRICE HISTORY
+function openPriceHistory(){
+  document.getElementById('ph-mat').value='';
+  renderPriceHistory();
+  openModal('m-ph');
+}
+function renderPriceHistory(){
+  const mat=document.getElementById('ph-mat').value;
+  let list=mat?D.spools.filter(s=>s.mat===mat):D.spools;
+  list=[...list].sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  const best=[...D.spools].sort((a,b)=>(a.cost/a.total)-(b.cost/b.total))[0];
+  let html=`<div class="card" style="background:var(--blue-light);border:1.5px solid #BFDBFE;margin-bottom:12px;">
+    <div style="font-size:12px;color:var(--blue);font-weight:600;margin-bottom:4px;">💡 Best value overall</div>
+    <div style="font-size:14px;font-weight:700;">${best?.name||'—'}</div>
+    <div style="font-size:12px;color:var(--text2);">${cur()}${best?(best.cost/best.total).toFixed(2):0}/g · ${best?.brand||''}</div>
+  </div>`;
+  if(!list.length){html+='<div class="empty"><div class="empty-e">📈</div><div class="empty-t">No data</div></div>';}
+  else{
+    html+=list.map(s=>{
+      const cpgVal=(s.cost/s.total).toFixed(2);
+      const isBest=s.id===best?.id;
+      return `<div class="card" style="padding:12px;${isBest?'border:1.5px solid var(--green);':''}">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:28px;height:28px;border-radius:50%;background:${s.color};flex-shrink:0;"></div>
+          <div style="flex:1;">
+            <div style="font-size:13px;font-weight:700;">${s.name}${isBest?' 🏆':''}</div>
+            <div style="font-size:11px;color:var(--text2);">${s.mat} · ${s.brand||'—'} · ${s.date||'?'}</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:14px;font-weight:700;">${cur()}${s.cost.toLocaleString('en-IN')}</div>
+            <div style="font-size:11px;color:${isBest?'var(--green)':'var(--text3)'};">${cur()}${cpgVal}/g</div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('ph-output').innerHTML=html;
+}
+
+// SHARE SNAPSHOT
+function openShareModal(){
+  drawSnapshot();
+  openModal('m-share');
+}
+function drawSnapshot(){
+  const canvas=document.getElementById('share-canvas');
+  const ctx=canvas.getContext('2d');
+  const W=800,H=600;
+  canvas.width=W;canvas.height=H;
+
+  // BG
+  ctx.fillStyle='#F4F0EB';ctx.fillRect(0,0,W,H);
+
+  // Header
+  ctx.fillStyle='#FF6B4A';ctx.fillRect(0,0,W,80);
+  ctx.fillStyle='white';ctx.font='bold 28px DM Sans, sans-serif';
+  ctx.fillText('🧵 FilaSpool — Inventory Snapshot',32,52);
+  ctx.font='14px DM Sans, sans-serif';ctx.fillStyle='rgba(255,255,255,0.8)';
+  ctx.fillText(new Date().toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'}),W-180,52);
+
+  // Stats row
+  const stats=[
+    {label:'Total Remaining',val:Math.round(D.spools.reduce((a,s)=>a+s.rem,0))+'g'},
+    {label:'Total Spent',val:cur()+Math.round(D.spools.reduce((a,s)=>a+s.cost,0)).toLocaleString('en-IN')},
+    {label:'Spools',val:D.spools.length},
+    {label:'Prints',val:D.prints.length},
+  ];
+  stats.forEach((st,i)=>{
+    const x=24+(i*(W-48)/4),y=100,w=(W-60)/4,h=70;
+    ctx.fillStyle='white';roundRect(ctx,x,y,w,h,12);ctx.fill();
+    ctx.fillStyle='#1A1714';ctx.font='bold 22px DM Sans,sans-serif';
+    ctx.fillText(st.val,x+14,y+40);
+    ctx.fillStyle='#7A746E';ctx.font='12px DM Sans,sans-serif';
+    ctx.fillText(st.label,x+14,y+58);
+  });
+
+  // Spool list
+  ctx.fillStyle='#7A746E';ctx.font='bold 12px DM Sans,sans-serif';
+  ctx.fillText('MY SPOOLS',24,198);
+  const topSpools=D.spools.slice(0,6);
+  topSpools.forEach((s,i)=>{
+    const col=i%2,row=Math.floor(i/2);
+    const x=24+col*((W-48)/2+4),y=210+row*90,w=(W-60)/2,h=80;
+    ctx.fillStyle='white';roundRect(ctx,x,y,w,h,12);ctx.fill();
+    ctx.fillStyle=s.color;ctx.beginPath();ctx.arc(x+28,y+26,18,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.4)';ctx.beginPath();ctx.arc(x+28,y+26,8,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#1A1714';ctx.font='bold 13px DM Sans,sans-serif';
+    const nm=s.name.length>22?s.name.slice(0,22)+'…':s.name;
+    ctx.fillText(nm,x+54,y+22);
+    ctx.fillStyle='#7A746E';ctx.font='11px DM Sans,sans-serif';
+    ctx.fillText(`${s.mat} · ${Math.round(s.rem)}g remaining`,x+54,y+38);
+    const pct=s.rem/s.total;
+    ctx.fillStyle='#EDE8E0';roundRect(ctx,x+54,y+50,w-70,8,4);ctx.fill();
+    ctx.fillStyle=pct>0.5?'#34C27A':pct>0.25?'#F5A623':'#FF4545';
+    roundRect(ctx,x+54,y+50,(w-70)*pct,8,4);ctx.fill();
+    ctx.fillStyle='#1A1714';ctx.font='bold 12px DM Sans,sans-serif';
+    ctx.fillText(`${cur()}${cpg(s)}/g`,w+x-56,y+22);
+  });
+
+  // Footer
+  ctx.fillStyle='rgba(26,23,20,0.08)';ctx.fillRect(0,H-36,W,36);
+  ctx.fillStyle='#7A746E';ctx.font='12px DM Sans,sans-serif';
+  ctx.fillText('Generated by FilaSpool · filaspool.app',24,H-14);
+}
+
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.arcTo(x+w,y,x+w,y+r,r);
+  ctx.lineTo(x+w,y+h-r);ctx.arcTo(x+w,y+h,x+w-r,y+h,r);ctx.lineTo(x+r,y+h);
+  ctx.arcTo(x,y+h,x,y+h-r,r);ctx.lineTo(x,y+r);ctx.arcTo(x,y,x+r,y,r);ctx.closePath();
+}
+
+function downloadSnapshot(){
+  const canvas=document.getElementById('share-canvas');
+  const a=document.createElement('a');
+  a.href=canvas.toDataURL('image/png');
+  a.download='filaspool-snapshot.png';a.click();
+  toast('Image downloaded ✓');
+}
+
+// PDF EXPORT
+function exportPDF(){
+  if(!D.prints.length){toast('No prints to export');return;}
+  try{
+    const {jsPDF}=window.jspdf;
+    const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+    const margin=12;
+    const pageW=297;
+    const pageH=210;
+    let pageNo=1;
+
+    const formatMoney=(v)=>`${cur()}${Math.round(v).toLocaleString('en-IN')}`;
+    const generatedOn=new Date().toLocaleString('en-IN',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    const totalCost=D.spools.reduce((a,s)=>a+s.cost,0);
+    const totalRem=D.spools.reduce((a,s)=>a+s.rem,0);
+    const totalPrintCost=D.prints.reduce((a,p)=>a+printCost(p),0);
+    const successCount=D.prints.filter(p=>p.pass==='pass').length;
+    const successPct=D.prints.length?Math.round((successCount/D.prints.length)*100):0;
+
+    const drawFooter=()=>{
+      doc.setDrawColor(230,224,216); doc.line(margin,pageH-10,pageW-margin,pageH-10);
+      doc.setFont('helvetica','normal');
+      doc.setFontSize(8);
+      doc.setTextColor(140,133,125);
+      doc.text('FilaSpool - Production Report',margin,pageH-6);
+      doc.text(`Page ${pageNo}`,pageW-margin,pageH-6,{align:'right'});
+    };
+
+    const drawHeader=(compact=false)=>{
+      if(!compact){
+        doc.setFillColor(255,107,74);
+        doc.rect(margin,10,pageW-(margin*2),16,'F');
+        doc.setTextColor(255,255,255);
+        doc.setFont('helvetica','bold');
+        doc.setFontSize(16);
+        doc.text('FilaSpool Print Performance Report',margin+4,20);
+        doc.setFont('helvetica','normal');
+        doc.setFontSize(9);
+        doc.text(`Generated: ${generatedOn}`,pageW-margin-4,20,{align:'right'});
+      } else {
+        doc.setFillColor(250,247,243);
+        doc.rect(margin,10,pageW-(margin*2),10,'F');
+        doc.setTextColor(26,23,20);
+        doc.setFont('helvetica','bold');
+        doc.setFontSize(11);
+        doc.text('FilaSpool Print Report (continued)',margin+3,16.5);
+        doc.setFont('helvetica','normal');
+        doc.setFontSize(8);
+        doc.text(generatedOn,pageW-margin-3,16.5,{align:'right'});
+      }
+      doc.setTextColor(0,0,0);
+    };
+
+    const drawSummaryStrip=()=>{
+      const cards=[
+        {k:'Total Prints',v:String(D.prints.length)},
+        {k:'Success Rate',v:`${successPct}%`},
+        {k:'Total Spools',v:String(D.spools.length)},
+        {k:'Filament Left',v:`${Math.round(totalRem)} g`},
+        {k:'Print Cost',v:formatMoney(totalPrintCost)},
+        {k:'Inventory Value',v:formatMoney(totalCost)}
+      ];
+      const gap=4;
+      const cardW=(pageW-(margin*2)-gap*5)/6;
+      const y=31;
+      cards.forEach((c,i)=>{
+        const x=margin+i*(cardW+gap);
+        doc.setFillColor(250,247,243);
+        doc.roundedRect(x,y,cardW,15,2,2,'F');
+        doc.setFont('helvetica','normal');
+        doc.setFontSize(7.5);
+        doc.setTextColor(122,116,110);
+        doc.text(c.k,x+2.5,y+5.5);
+        doc.setFont('helvetica','bold');
+        doc.setFontSize(10);
+        doc.setTextColor(26,23,20);
+        doc.text(c.v,x+2.5,y+11.5);
+      });
+      doc.setTextColor(0,0,0);
+    };
+
+    const drawTableHeader=(y)=>{
+      doc.setFillColor(255,107,74);
+      doc.rect(margin,y-5,pageW-(margin*2),8,'F');
+      doc.setFont('helvetica','bold');
+      doc.setFontSize(7.6);
+      doc.setTextColor(255,255,255);
+      doc.text('Date',margin+1,y);
+      doc.text('Print',margin+26,y);
+      doc.text('Spool',margin+82,y);
+      doc.text('g',margin+139,y);
+      doc.text('hrs',margin+153,y);
+      doc.text('Result',margin+166,y);
+      doc.text('Quality',margin+184,y);
+      doc.text(`Cost (${cur()})`,margin+205,y);
+      doc.text('Notes',margin+227,y);
+      doc.setTextColor(0,0,0);
+    };
+
+    drawHeader(false);
+    drawSummaryStrip();
+
+    let y=53;
+    drawTableHeader(y);
+    y+=4;
+
+    D.prints.forEach((p,i)=>{
+      const sp=D.spools.find(s=>s.id===p.sid);
+      const dt=doc.splitTextToSize(p.date||'?',22);
+      const printName=doc.splitTextToSize(p.name||'?',54);
+      const spoolName=doc.splitTextToSize(sp?.name||'?',54);
+      const notes=doc.splitTextToSize(p.notes||'-',45);
+      const rowH=Math.max(8,Math.max(dt.length,printName.length,spoolName.length,notes.length)*3.8+2.5);
+
+      if(y+rowH>194){
+        drawFooter();
+        doc.addPage();
+        pageNo+=1;
+        drawHeader(true);
+        y=26;
+        drawTableHeader(y);
+        y+=4;
+      }
+
+      if(i%2===0){
+        doc.setFillColor(248,245,240);
+        doc.rect(margin,y-3,pageW-(margin*2),rowH,'F');
+      }
+
+      const cost=sp?Math.round((sp.cost/sp.total)*(p.grams||0)):0;
+      doc.setFont('helvetica','normal');
+      doc.setFontSize(7.5);
+      doc.text(dt,margin+1,y+0.8);
+      doc.text(printName,margin+26,y+0.8);
+      doc.text(spoolName,margin+82,y+0.8);
+      doc.text(String(p.grams||0),margin+139,y+0.8);
+      doc.text(String(p.hrs||0),margin+153,y+0.8);
+      doc.setTextColor(p.pass==='pass'?52:255,p.pass==='pass'?194:69,p.pass==='pass'?122:69);
+      doc.text((p.pass||'-').toUpperCase(),margin+166,y+0.8);
+      doc.setTextColor(0,0,0);
+      doc.text(`${p.rate||0}/5`,margin+184,y+0.8);
+      doc.text(String(cost),margin+205,y+0.8);
+      doc.text(notes,margin+227,y+0.8);
+
+      doc.setDrawColor(238,232,226);
+      doc.line(margin,y+rowH-3,pageW-margin,y+rowH-3);
+      y+=rowH;
+    });
+
+    if(y+16>194){
+      drawFooter();
+      doc.addPage();
+      pageNo+=1;
+      drawHeader(true);
+      y=28;
+    }
+
+    doc.setFillColor(232,250,241);
+    doc.roundedRect(margin,y+3,pageW-(margin*2),11,2,2,'F');
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(10);
+    doc.setTextColor(52,194,122);
+    doc.text(`Total Print Cost: ${formatMoney(totalPrintCost)}   |   Success: ${successCount}/${D.prints.length} (${successPct}%)`,margin+4,y+10.5);
+    doc.setTextColor(0,0,0);
+
+    drawFooter();
+    doc.save('filaspool-report.pdf');
+    toast('PDF exported ✓');
+  }catch(e){toast('PDF generation failed');console.error(e);}
+}
+
+// JSON Export/Import
+function exportJSON(){
+  const a=document.createElement('a');
+  a.href='data:application/json,'+encodeURIComponent(JSON.stringify(D,null,2));
+  a.download='filaspool-backup.json';a.click();toast('Backup exported ✓');
+}
+function importJSON(input){
+  const file=input.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{try{D=JSON.parse(e.target.result);ensureSyncMeta();D.spools.forEach(s=>{if(!s._updatedAt)s._updatedAt=nowTs();});D.prints.forEach(p=>{if(!p._updatedAt)p._updatedAt=nowTs();});D._sync.settingsUpdatedAt=nowTs();save();renderAll();toast('Data imported ✓');}catch{toast('Invalid file');}};
+  reader.readAsText(file);
+}
+
+// SHOPPING
+function orderNow(id){const s=D.spools.find(x=>x.id===id);if(s){s.ordered=true;touchSpool(s);save();renderAll();toast('Marked as ordered');}}
+function received(id){const s=D.spools.find(x=>x.id===id);if(s){s.rem=s.total;s.ordered=false;touchSpool(s);save();renderAll();toast('Restocked ✓');}}
+
+// RENDER
+function renderAll(){
+  renderDash();renderSpools();renderHist();renderShop();renderSettings();
+}
+
+function renderDash(){
+  const totalRem=D.spools.reduce((a,s)=>a+s.rem,0);
+  const spent=D.spools.reduce((a,s)=>a+s.cost,0);
+  const lowC=D.spools.filter(low).length;
+  document.getElementById('s-grid').innerHTML=`
+    <div class="stat hi"><div class="stat-ico">🧵</div><div class="stat-n">${Math.round(totalRem)}g</div><div class="stat-l">Filament left</div></div>
+    <div class="stat"><div class="stat-ico">💰</div><div class="stat-n">${cur()}${Math.round(spent).toLocaleString('en-IN')}</div><div class="stat-l">Total spent</div></div>
+    <div class="stat"><div class="stat-ico">🖨️</div><div class="stat-n">${D.prints.length}</div><div class="stat-l">Prints logged</div></div>
+    <div class="stat"><div class="stat-ico">⚠️</div><div class="stat-n">${lowC}</div><div class="stat-l">Low stock</div></div>`;
+
+  const matMap={};D.spools.forEach(s=>matMap[s.mat]=(matMap[s.mat]||0)+s.rem);
+  const tot=Object.values(matMap).reduce((a,b)=>a+b,0)||1;
+  document.getElementById('s-mat').innerHTML='<div style="font-size:13px;font-weight:600;margin-bottom:12px;">Material Breakdown</div>'+
+    Object.entries(matMap).sort((a,b)=>b[1]-a[1]).map(([m,v])=>`
+      <div class="mat-row">
+        <div class="mat-dot" style="background:${MAT_COL[m]||'#888'}"></div>
+        <div class="mat-label">${m}</div>
+        <div class="mat-track"><div class="mat-fill" style="width:${Math.round(v/tot*100)}%;background:${MAT_COL[m]||'#888'}"></div></div>
+        <div class="mat-pct">${Math.round(v/tot*100)}%</div>
+      </div>`).join('');
+
+  const recent=D.prints.slice(0,3);
+  document.getElementById('s-recent').innerHTML=recent.length?recent.map(p=>{
+    const sp=D.spools.find(s=>s.id===p.sid);
+    return`<div class="card"><div class="print-row">
+      <div class="print-ico" style="background:${p.pass==='pass'?'var(--green-light)':'var(--red-light)'};">${p.pass==='pass'?'✅':'❌'}</div>
+      <div class="print-body"><div class="print-name">${p.name}</div><div class="print-sub">${sp?.name||'?'} · ${p.grams}g · ${p.hrs}h</div><div class="stars">${'⭐'.repeat(p.rate)}</div></div>
+      <div class="print-right"><div class="print-cost">${cur()}${printCost(p)}</div><div class="print-date">${p.date}</div></div>
+    </div></div>`;
+  }).join(''):`<div class="empty"><div class="empty-e">🖨️</div><div class="empty-t">No prints yet</div></div>`;
+}
+
+function renderSpools(q=''){
+  const query=(q||document.getElementById('spool-q')?.value||'').toLowerCase();
+  let list=D.spools.filter(s=>!query||s.name.toLowerCase().includes(query)||s.mat.toLowerCase().includes(query));
+  list=sortSpools(list);
+  const bestId=list.length?[...list].sort((a,b)=>(a.cost/a.total)-(b.cost/b.total))[0].id:null;
+  document.getElementById('s-spools').innerHTML=list.length?list.map(s=>{
+    const pct=Math.round(s.rem/s.total*100);
+    const isBest=s.id===bestId&&sortKey==='cpg';
+    return`<div class="card" id="sp-${s.id}">
+      <div class="spool-row">
+        <div class="spool-color" style="background:${s.color}"></div>
+        <div class="spool-body">
+          <div class="spool-name">${s.name}</div>
+          <div class="spool-sub">${s.mat} · ${s.brand||'—'}${s.tempNoz?` · ${s.tempNoz}°C`:''}</div>
+          <div class="bar-wrap"><div class="bar" style="width:${pct}%;background:${barColor(pct)}"></div></div>
+        </div>
+        <div class="spool-right" onclick="toggleAct(${s.id})">
+          <div class="spool-g">${Math.round(s.rem)}g</div>
+          <div class="tag ${low(s)?'tag-low':isBest?'tag-best':'tag-ok'}">${low(s)?'Low':isBest?'Best ₹/g':'OK'}</div>
+          <div style="font-size:11px;color:var(--text3);margin-top:2px;">${cur()}${cpg(s)}/g</div>
+        </div>
+      </div>
+      <div class="spool-actions" id="act-${s.id}" style="display:none;">
+        <button class="act-btn act-edit" onclick="openSpoolModal(${s.id})">✏️ Edit</button>
+        <button class="act-btn act-log" onclick="openLogModal(${s.id})">🖨️ Log</button>
+        <button class="act-btn" style="background:var(--blue-light);color:var(--blue);" onclick="estimateWithSpool(${s.id})">🔮 Estimate</button>
+        <button class="act-btn act-del" onclick="deleteSpool(${s.id})">🗑️</button>
+      </div>
+    </div>`;
+  }).join(''):`<div class="empty"><div class="empty-e">🎡</div><div class="empty-t">No spools</div><div class="empty-s">Tap + to add</div></div>`;
+}
+
+function estimateWithSpool(id){
+  const sel=document.getElementById('e-spool');
+  sel.innerHTML='<option value="">— Show all recommendations —</option>'+D.spools.map(s=>`<option value="${s.id}">${s.name} (${Math.round(s.rem)}g left)</option>`).join('');
+  sel.value=id;
+  document.getElementById('e-weight').value='';
+  document.getElementById('est-output').innerHTML='';
+  openModal('m-est');
+}
+
+function toggleAct(id){const el=document.getElementById('act-'+id);el.style.display=el.style.display==='none'?'flex':'none';}
+
+function renderHist(){
+  document.getElementById('s-hist').innerHTML=D.prints.length?D.prints.map(p=>{
+    const sp=D.spools.find(s=>s.id===p.sid);
+    return`<div class="card"><div class="print-row">
+      <div class="print-ico" style="background:${p.pass==='pass'?'var(--green-light)':'var(--red-light)'};">${p.pass==='pass'?'✅':'❌'}</div>
+      <div class="print-body"><div class="print-name">${p.name}</div><div class="print-sub">${sp?.name||'?'} · ${p.grams}g · ${p.hrs}h</div><div class="stars">${'⭐'.repeat(p.rate)}${p.notes?` <span style="font-size:11px;color:var(--text3);">· ${p.notes}</span>`:''}</div></div>
+      <div class="print-right"><div class="print-cost">${cur()}${printCost(p)}</div><div class="print-date">${p.date}</div>
+      <div style="margin-top:4px;"><button onclick="deleteLog(${p.id})" style="background:var(--red-light);color:var(--red);border:none;border-radius:6px;font-size:11px;font-weight:600;padding:3px 8px;cursor:pointer;">Remove</button></div></div>
+    </div></div>`;
+  }).join(''):`<div class="empty"><div class="empty-e">📋</div><div class="empty-t">No prints logged</div><div class="empty-s">Tap + to log</div></div>`;
+}
+
+function renderShop(){
+  const lowList=D.spools.filter(low);
+  document.getElementById('s-shop').innerHTML=lowList.length?lowList.map(s=>`
+    <div class="card"><div class="spool-row">
+      <div class="spool-color" style="background:${s.color}"></div>
+      <div class="spool-body"><div class="spool-name">${s.name}</div><div class="spool-sub">${s.mat} · ${Math.round(s.rem)}g left</div>
+      <div style="margin-top:5px;"><span class="tag ${s.ordered?'tag-ord':'tag-low'}">${s.ordered?'📦 Ordered':'⚠️ Low'}</span></div></div>
+      <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
+        ${s.ordered
+          ?`<button onclick="received(${s.id})" style="background:var(--green-light);color:var(--green);border:none;border-radius:8px;font-size:12px;font-weight:700;padding:7px 10px;cursor:pointer;">✅ Received</button>`
+          :`<button onclick="orderNow(${s.id})" style="background:var(--accent-light);color:var(--accent);border:none;border-radius:8px;font-size:12px;font-weight:700;padding:7px 10px;cursor:pointer;">Order Now</button>`}
+      </div>
+    </div></div>`).join(''):`<div class="empty"><div class="empty-e">🎉</div><div class="empty-t">All stocked up!</div><div class="empty-s">Below ${D.settings.threshold}g threshold</div></div>`;
+}
+
+function renderSettings(){
+  document.getElementById('c-thresh').value=D.settings.threshold;
+  document.getElementById('c-cur').value=D.settings.currency;
+  document.getElementById('c-diam').value=D.settings.diameter;
+  document.getElementById('c-gst').value=D.settings.gstRate;
+  document.getElementById('c-count').textContent=D.spools.length;
+}
+
+// Wire up estimator modal open
+document.getElementById('m-est').addEventListener('click',e=>bgClose(e,'m-est'));
+
+// Wire up GST modal to render on open
+const origOpen=openModal;
+window.openModal=function(id){
+  origOpen(id);
+  if(id==='m-gst')renderGST();
+  if(id==='m-est'){
+    const sel=document.getElementById('e-spool');
+    sel.innerHTML='<option value="">— Show all recommendations —</option>'+D.spools.map(s=>`<option value="${s.id}">${s.name} (${Math.round(s.rem)}g left)</option>`).join('');
+    document.getElementById('e-weight').value='';
+    document.getElementById('est-output').innerHTML='';
+  }
+};
+
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2400);}
+
+load();renderAll();
+</script>
+
+<!-- FIREBASE SDK -->
+<script type="module">
+  import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged, setPersistence, browserLocalPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyB8ZzlsMgEe3rz0nFRkWeTC-xmuD-kbMDc",
+        authDomain: "esp8266-89659.firebaseapp.com",
+        databaseURL: "https://esp8266-89659-default-rtdb.firebaseio.com",
+        projectId: "esp8266-89659",
+        storageBucket: "esp8266-89659.firebasestorage.app",
+        messagingSenderId: "479032973083",
+        appId: "1:479032973083:web:4feb367023cf9606d965be",
+        measurementId: "G-38TFSX0020"
+    };
+
+    const appId = 'esp8266-filaspool-v3';
+    let auth;
+    let db;
+    let userId = null;
+    let unsubscribeSync = null;
+    let applyingRemote = false;
+    let pendingCloudWrite = false;
+    let lastSyncAt = 0;
+    let syncOkTimer = null;
+    let initInProgress = false;
+
+    const baseSave = window.save;
+    const setCloudStatus = (text, color) => {
+      const badge = document.getElementById('cloud-status-badge');
+      if (badge) {
+        badge.textContent = text;
+        badge.style.color = color || 'var(--text3)';
+      }
+    };
+
+    const updateSyncMetaUI = () => {
+      const lastEl = document.getElementById('last-sync-display');
+      const queueEl = document.getElementById('sync-queue-display');
+      if (lastEl) {
+        lastEl.textContent = lastSyncAt ? new Date(lastSyncAt).toLocaleString() : 'Never';
+      }
+      if (queueEl) {
+        queueEl.textContent = `Queue: ${pendingCloudWrite ? 1 : 0}`;
+      }
+    };
+
+    const setUserId = (uid) => {
+      const el = document.getElementById('user-id-display');
+      if (el) el.textContent = uid ? `User: ${uid}` : 'Waiting for auth...';
+    };
+
+    const describeAuthError = (err) => {
+      const code = err?.code || 'unknown';
+      if (code === 'auth/operation-not-allowed') return 'Anonymous auth is disabled in Firebase Console.';
+      if (code === 'auth/network-request-failed') return 'Network blocked Firebase. Check internet/firewall.';
+      if (code === 'auth/unauthorized-domain') return 'Current host is not in Firebase authorized domains.';
+      return `${code}${err?.message ? `: ${err.message}` : ''}`;
+    };
+
+    const showSyncedPulse = () => {
+      const el = document.getElementById('sync-ok');
+      if (!el) return;
+      el.classList.add('show');
+      if (syncOkTimer) clearTimeout(syncOkTimer);
+      syncOkTimer = setTimeout(() => el.classList.remove('show'), 1100);
+    };
+
+    const hideLoader = () => {
+      const ov = document.getElementById('loading-overlay');
+      if (!ov) return;
+      ov.style.opacity = '0';
+      setTimeout(() => { ov.style.display = 'none'; }, 350);
+    };
+
+    window.hideLoaderManual = () => {
+      hideLoader();
+      setCloudStatus('LOCAL', 'var(--amber)');
+      window.toast('Running in local mode');
+      updateSyncMetaUI();
+    };
+
+    const normalizeData = (incoming) => {
+      const safe = incoming && typeof incoming === 'object' ? incoming : {};
+      return {
+        spools: Array.isArray(safe.spools) ? safe.spools : [],
+        prints: Array.isArray(safe.prints) ? safe.prints : [],
+        settings: {
+          threshold: safe.settings?.threshold ?? 200,
+          currency: safe.settings?.currency ?? '₹',
+          diameter: safe.settings?.diameter ?? '1.75',
+          gstRate: safe.settings?.gstRate ?? 18
+        },
+        _sync: {
+          spoolTombstones: safe._sync?.spoolTombstones && typeof safe._sync.spoolTombstones === 'object' ? safe._sync.spoolTombstones : {},
+          printTombstones: safe._sync?.printTombstones && typeof safe._sync.printTombstones === 'object' ? safe._sync.printTombstones : {},
+          settingsUpdatedAt: safe._sync?.settingsUpdatedAt ?? 0
+        },
+        editId: null
+      };
+    };
+
+    const mergeByLatest = (localList, remoteList, tombstones) => {
+      const byId = new Map();
+      [...localList, ...remoteList].forEach((item) => {
+        if (!item || item.id === undefined || item.id === null) return;
+        const key = String(item.id);
+        const prev = byId.get(key);
+        const prevTs = prev?._updatedAt || 0;
+        const nextTs = item._updatedAt || 0;
+        if (!prev || nextTs >= prevTs) byId.set(key, item);
+      });
+      return [...byId.values()].filter((item) => {
+        const tombTs = tombstones[String(item.id)] || 0;
+        const itemTs = item._updatedAt || 0;
+        return tombTs < itemTs;
+      });
+    };
+
+    const mergeState = (localRaw, remoteRaw) => {
+      const local = normalizeData(localRaw);
+      const remote = normalizeData(remoteRaw);
+      const spoolTombstones = { ...local._sync.spoolTombstones, ...remote._sync.spoolTombstones };
+      const printTombstones = { ...local._sync.printTombstones, ...remote._sync.printTombstones };
+
+      Object.keys(spoolTombstones).forEach((id) => {
+        spoolTombstones[id] = Math.max(local._sync.spoolTombstones[id] || 0, remote._sync.spoolTombstones[id] || 0);
+      });
+      Object.keys(printTombstones).forEach((id) => {
+        printTombstones[id] = Math.max(local._sync.printTombstones[id] || 0, remote._sync.printTombstones[id] || 0);
+      });
+
+      const merged = {
+        spools: mergeByLatest(local.spools, remote.spools, spoolTombstones),
+        prints: mergeByLatest(local.prints, remote.prints, printTombstones),
+        settings: (local._sync.settingsUpdatedAt || 0) > (remote._sync.settingsUpdatedAt || 0) ? local.settings : remote.settings,
+        _sync: {
+          spoolTombstones,
+          printTombstones,
+          settingsUpdatedAt: Math.max(local._sync.settingsUpdatedAt || 0, remote._sync.settingsUpdatedAt || 0)
+        },
+        editId: null
+      };
+      return merged;
+    };
+
+    async function saveToCloud() {
+      if (!db || !userId || applyingRemote) {
+        pendingCloudWrite = true;
+        updateSyncMetaUI();
+        return;
+      }
+      try {
+        const stateDoc = doc(db, 'artifacts', appId, 'users', userId, 'inventory', 'state');
+        await setDoc(stateDoc, window.D);
+        pendingCloudWrite = false;
+        lastSyncAt = Date.now();
+        updateSyncMetaUI();
+        showSyncedPulse();
+      } catch (err) {
+        console.error('Cloud Save Error:', err);
+        setCloudStatus('OFFLINE', 'var(--red)');
+        pendingCloudWrite = true;
+        updateSyncMetaUI();
+      }
+    }
+
+    function setupSync() {
+      if (!db || !userId) return;
+      if (unsubscribeSync) {
+        unsubscribeSync();
+        unsubscribeSync = null;
+      }
+      const stateDoc = doc(db, 'artifacts', appId, 'users', userId, 'inventory', 'state');
+      unsubscribeSync = onSnapshot(stateDoc, (snapshot) => {
+        setCloudStatus('CONNECTED', 'var(--green)');
+        if (snapshot.exists()) {
+          applyingRemote = true;
+          const localNorm = normalizeData(window.D);
+          const localStr = JSON.stringify(localNorm);
+          const merged = mergeState(window.D, snapshot.data());
+          const mergedStr = JSON.stringify(merged);
+          const remoteStr = JSON.stringify(normalizeData(snapshot.data()));
+          window.D = merged;
+          localStorage.setItem('fs4', JSON.stringify(window.D));
+          window.renderAll();
+          applyingRemote = false;
+          if (mergedStr !== remoteStr) {
+            if (mergedStr !== localStr) {
+              window.toast('Conflict resolved: merged local + cloud changes');
+            }
+            saveToCloud();
+          } else {
+            pendingCloudWrite = false;
+            lastSyncAt = Date.now();
+            updateSyncMetaUI();
+            showSyncedPulse();
+          }
+        } else {
+          saveToCloud();
+        }
+        hideLoader();
+      }, (err) => {
+        console.error('Sync Error:', err);
+        setCloudStatus('OFFLINE', 'var(--red)');
+        pendingCloudWrite = true;
+        updateSyncMetaUI();
+        hideLoader();
+      });
+    }
+
+    window.syncForce = async () => {
+      pendingCloudWrite = true;
+      updateSyncMetaUI();
+      setCloudStatus('CONNECTING', 'var(--amber)');
+      if (!userId) await initCloud();
+      await saveToCloud();
+      window.toast('Sync requested');
+    };
+
+    window.save = function() {
+      baseSave();
+      pendingCloudWrite = true;
+      updateSyncMetaUI();
+      saveToCloud();
+    };
+
+    const loaderTimeout = setTimeout(() => {
+      const status = document.getElementById('loading-status');
+      const actions = document.getElementById('loading-actions');
+      if (status) status.textContent = 'Connection is slow...';
+      if (actions) actions.style.display = 'block';
+    }, 5000);
+
+    async function initCloud() {
+      if (initInProgress) return;
+      initInProgress = true;
+      try {
+        setCloudStatus('CONNECTING', 'var(--amber)');
+        setUserId(null);
+        const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+        auth = getAuth(app);
+        db = getFirestore(app);
+
+        try {
+          await setPersistence(auth, browserLocalPersistence);
+        } catch {
+          await setPersistence(auth, inMemoryPersistence);
+        }
+
+        onAuthStateChanged(auth, (user) => {
+          if (!user) return;
+          userId = user.uid;
+          setCloudStatus('CONNECTED', 'var(--green)');
+          setUserId(user.uid);
+          setupSync();
+          if (pendingCloudWrite) saveToCloud();
+        });
+
+        const cred = await signInAnonymously(auth);
+        if (cred?.user?.uid) {
+          userId = cred.user.uid;
+          setCloudStatus('CONNECTED', 'var(--green)');
+          setUserId(cred.user.uid);
+          setupSync();
+          if (pendingCloudWrite) saveToCloud();
+        }
+      } catch (err) {
+        console.error('Firebase init error:', err);
+        setCloudStatus('OFFLINE', 'var(--red)');
+        setUserId(`Auth error: ${describeAuthError(err)}`);
+        const status = document.getElementById('loading-status');
+        if (status) status.textContent = 'Cloud unavailable. Using local storage.';
+        setTimeout(() => hideLoader(), 1200);
+      } finally {
+        initInProgress = false;
+        clearTimeout(loaderTimeout);
+        updateSyncMetaUI();
+      }
+    }
+
+    window.addEventListener('online', () => {
+      if (pendingCloudWrite) {
+        setCloudStatus('CONNECTING', 'var(--amber)');
+        saveToCloud();
+      }
+    });
+
+    initCloud();
+</script>
+</body>
+</html>
