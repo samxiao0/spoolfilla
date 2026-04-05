@@ -1379,6 +1379,7 @@ load();renderAll();
         const stateDoc = doc(db, 'artifacts', appId, 'users', userId, 'inventory', 'state');
         await setDoc(stateDoc, window.getAppState());
         pendingCloudWrite = false;
+        setCloudStatus('CONNECTED', 'var(--green)');
         lastSyncAt = Date.now();
         updateSyncMetaUI();
         showSyncedPulse();
