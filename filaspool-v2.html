@@ -195,6 +195,14 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
 #loading-overlay { position:fixed; inset:0; background:var(--bg); z-index:999; display:flex; flex-direction:column; align-items:center; justify-content:center; transition:opacity .35s; padding:20px; text-align:center; }
 .spinner { width:40px; height:40px; border:4px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 1s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
+
+/* AUTH SCREEN */
+#auth-screen { position:fixed; inset:0; background:linear-gradient(140deg,#f5eee6 0%,#fdf8f2 48%,#efe8df 100%); z-index:998; display:none; align-items:center; justify-content:center; padding:18px; }
+.auth-card { width:100%; max-width:360px; background:var(--card); border:1px solid var(--border); border-radius:20px; box-shadow:0 16px 36px rgba(0,0,0,.12); padding:24px 18px; text-align:center; }
+.auth-badge { display:inline-block; font-size:11px; font-weight:700; letter-spacing:.6px; color:var(--accent); background:var(--accent-light); border-radius:99px; padding:5px 10px; margin-bottom:12px; }
+.auth-title { font-size:22px; font-weight:700; letter-spacing:-.4px; margin-bottom:8px; color:var(--text); }
+.auth-sub { font-size:13px; line-height:1.5; color:var(--text2); margin-bottom:14px; }
+.auth-note { font-size:11px; color:var(--text3); margin-top:10px; }
 </style>
 </head>
 <body>
@@ -203,6 +211,16 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
   <p id="loading-status" style="margin-top:14px;font-size:13px;font-weight:600;color:var(--text2);">Connecting to Cloud...</p>
   <div id="loading-actions" style="display:none;margin-top:12px;">
     <button class="btn btn-ghost" onclick="hideLoaderManual()" style="padding:10px 14px;font-size:12px;">Skip Cloud & Load Local</button>
+  </div>
+</div>
+<div id="auth-screen">
+  <div class="auth-card">
+    <div class="auth-badge">FilaSpool Cloud</div>
+    <div class="auth-title">Sign in to Sync</div>
+    <div class="auth-sub">Use Google sign-in so your spools and print history are stored securely under your own account.</div>
+    <button class="btn btn-pri" onclick="signInWithGoogle()" style="margin-top:4px;">🔐 Continue with Google</button>
+    <button class="btn btn-ghost" onclick="hideAuthScreen()">Use Local Only</button>
+    <div class="auth-note">Each Google account gets a separate cloud dataset.</div>
   </div>
 </div>
 <div id="app">
@@ -334,6 +352,8 @@ body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text)
       <div style="font-size:11px;color:var(--text3);" id="sync-queue-display">Queue: 0</div>
     </div>
     <button class="btn btn-blue" onclick="syncForce()" style="margin-top:10px;">🔄 Sync Now</button>
+    <button class="btn btn-ghost" onclick="signInWithGoogle()" style="margin-top:8px;">🔐 Sign in with Google</button>
+    <button class="btn btn-ghost" onclick="logoutCloud()" style="margin-top:8px;color:var(--red);">Sign Out</button>
     <div id="sync-ok" class="sync-ok">✅ Synced</div>
   </div>
 
@@ -486,8 +506,44 @@ const MAT_COL={PLA:'#2980B9',PETG:'#27AE60',ABS:'#E67E22',TPU:'#8E44AD',ASA:'#E7
 const cur=()=>D.settings.currency;
 const gstRate=()=>D.settings.gstRate||0;
 
-let D={spools:[],prints:[],settings:{threshold:200,currency:'₹',diameter:'1.75',gstRate:18},editId:null};
+const SAMPLE_SPOOL_NAMES=['Galaxy Black PLA','Sunrise Orange PETG','Ocean Blue PLA','Ruby Red ABS','Neon Green TPU'];
+const SAMPLE_PRINT_NAMES=['Phone Stand v2','Mechanical Iris Box','Flexi Dragon','ABS Bracket'];
+
+function emptyState(){
+  return {spools:[],prints:[],settings:{threshold:200,currency:'₹',diameter:'1.75',gstRate:18},editId:null,_sync:{spoolTombstones:{},printTombstones:{},settingsUpdatedAt:0}};
+}
+
+let D=emptyState();
 let sortKey='name';
+let storageScope='guest';
+
+function activeCacheKey(){
+  return storageScope==='guest' ? 'fs4_guest' : `fs4_uid_${storageScope}`;
+}
+
+function isPredefinedSampleData(state){
+  const spools=Array.isArray(state?.spools)?state.spools:[];
+  const prints=Array.isArray(state?.prints)?state.prints:[];
+  if(spools.length!==5||prints.length!==4)return false;
+  const spoolNames=spools.map(s=>s?.name).sort();
+  const printNames=prints.map(p=>p?.name).sort();
+  return JSON.stringify(spoolNames)===JSON.stringify([...SAMPLE_SPOOL_NAMES].sort())&&JSON.stringify(printNames)===JSON.stringify([...SAMPLE_PRINT_NAMES].sort());
+}
+
+function stripPredefinedSampleData(state){
+  const safe=state&&typeof state==='object'?state:{};
+  if(!isPredefinedSampleData(safe))return safe;
+  return {spools:[],prints:[],settings:safe.settings||emptyState().settings,editId:null,_sync:safe._sync||emptyState()._sync};
+}
+
+window.stripPredefinedSampleData=stripPredefinedSampleData;
+window.getAppState=()=>D;
+window.setAppState=(next)=>{D=next&&typeof next==='object'?next:emptyState();};
+window.setStorageScope=function(uid){
+  storageScope=uid||'guest';
+  load();
+  renderAll();
+};
 
 function nowTs(){return Date.now();}
 function ensureSyncMeta(){
@@ -502,48 +558,26 @@ function markSpoolDeleted(id){ensureSyncMeta();D._sync.spoolTombstones[String(id
 function markPrintDeleted(id){ensureSyncMeta();D._sync.printTombstones[String(id)]=nowTs();}
 
 function load(){
-  try{const s=localStorage.getItem('fs4');if(s)D=JSON.parse(s);}catch(e){}
+  try{
+    let s=localStorage.getItem(activeCacheKey());
+    if(!s&&storageScope==='guest'){
+      const legacy=localStorage.getItem('fs4');
+      if(legacy){
+        localStorage.setItem(activeCacheKey(),legacy);
+        localStorage.removeItem('fs4');
+        s=legacy;
+      }
+    }
+    D=s?JSON.parse(s):emptyState();
+  }catch(e){D=emptyState();}
+  D=stripPredefinedSampleData(D);
   ensureSyncMeta();
   D.spools.forEach(s=>{if(!s._updatedAt)s._updatedAt=0;});
   D.prints.forEach(p=>{if(!p._updatedAt)p._updatedAt=0;});
   if(!D.settings.gstRate&&D.settings.gstRate!==0)D.settings.gstRate=18;
-  if(!D.spools.length)seed();
 }
-function save(){localStorage.setItem('fs4',JSON.stringify(D));}
+function save(){localStorage.setItem(activeCacheKey(),JSON.stringify(D));}
 
-function seed(){
-  const ts=nowTs();
-  D.spools=[
-    {id:1,name:'Galaxy Black PLA',mat:'PLA',brand:'Bambu Lab',total:1000,rem:740,cost:1199,diam:'1.75',color:'#2C3E50',date:'2025-01-10',tempNoz:215,tempBed:60,_updatedAt:ts},
-    {id:2,name:'Sunrise Orange PETG',mat:'PETG',brand:'eSUN',total:1000,rem:160,cost:899,diam:'1.75',color:'#E67E22',date:'2025-01-15',tempNoz:235,tempBed:70,_updatedAt:ts},
-    {id:3,name:'Ocean Blue PLA',mat:'PLA',brand:'Bambu Lab',total:1000,rem:820,cost:1199,diam:'1.75',color:'#2980B9',date:'2025-02-01',tempNoz:215,tempBed:60,_updatedAt:ts},
-    {id:4,name:'Ruby Red ABS',mat:'ABS',brand:'Polymaker',total:750,rem:75,cost:1499,diam:'1.75',color:'#E74C3C',date:'2025-02-10',tempNoz:240,tempBed:100,_updatedAt:ts},
-    {id:5,name:'Neon Green TPU',mat:'TPU',brand:'Sunlu',total:500,rem:340,cost:799,diam:'1.75',color:'#27AE60',date:'2025-03-01',tempNoz:225,tempBed:30,_updatedAt:ts},
-  ];
-  D.prints=[
-    {id:1,name:'Phone Stand v2',sid:1,grams:28,hrs:1.5,rate:5,pass:'pass',notes:'Perfect',date:'2025-03-15',_updatedAt:ts},
-    {id:2,name:'Mechanical Iris Box',sid:3,grams:112,hrs:6,rate:4,pass:'pass',notes:'Minor stringing',date:'2025-03-18',_updatedAt:ts},
-    {id:3,name:'Flexi Dragon',sid:5,grams:42,hrs:3,rate:5,pass:'pass',notes:'Beautiful!',date:'2025-04-01',_updatedAt:ts},
-    {id:4,name:'ABS Bracket',sid:4,grams:35,hrs:2,rate:2,pass:'fail',notes:'Delamination',date:'2025-03-28',_updatedAt:ts},
-  ];
-  ensureSyncMeta();
-  D._sync.settingsUpdatedAt=ts;
-  save();
-}
-
-function go(id,btn){
-  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
-  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('on'));
-  document.getElementById('p-'+id).classList.add('on');
-  btn.classList.add('on');
-  renderAll();
-}
-
-function openModal(id){document.getElementById(id).classList.add('on');}
-function closeModal(id){document.getElementById(id).classList.remove('on');}
-function bgClose(e,id){if(e.target.classList.contains('overlay'))closeModal(id);}
-
-let selCol='#2C3E50';
 function openSpoolModal(editId){
   D.editId=editId||null;
   const sp=editId?D.spools.find(s=>s.id==editId):null;
@@ -1143,7 +1177,7 @@ load();renderAll();
 <!-- FIREBASE SDK -->
 <script type="module">
   import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-  import { getAuth, signInAnonymously, onAuthStateChanged, setPersistence, browserLocalPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, setPersistence, browserLocalPersistence, inMemoryPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -1167,6 +1201,9 @@ load();renderAll();
     let lastSyncAt = 0;
     let syncOkTimer = null;
     let initInProgress = false;
+    let authObserverBound = false;
+    const googleProvider = new GoogleAuthProvider();
+    googleProvider.setCustomParameters({ prompt: 'select_account' });
 
     const baseSave = window.save;
     const setCloudStatus = (text, color) => {
@@ -1195,9 +1232,12 @@ load();renderAll();
 
     const describeAuthError = (err) => {
       const code = err?.code || 'unknown';
-      if (code === 'auth/operation-not-allowed') return 'Anonymous auth is disabled in Firebase Console.';
+      if (code === 'auth/operation-not-allowed') return 'Google sign-in is disabled in Firebase Console.';
+      if (code === 'auth/admin-restricted-operation') return 'Project blocks end-user sign-in. In Firebase Console: enable Google provider and allow user sign-up in Authentication settings.';
       if (code === 'auth/network-request-failed') return 'Network blocked Firebase. Check internet/firewall.';
       if (code === 'auth/unauthorized-domain') return 'Current host is not in Firebase authorized domains.';
+      if (code === 'auth/popup-blocked') return 'Popup was blocked by the browser. Allow popups and retry.';
+      if (code === 'auth/popup-closed-by-user') return 'Sign-in popup was closed before completion.';
       return `${code}${err?.message ? `: ${err.message}` : ''}`;
     };
 
@@ -1216,6 +1256,18 @@ load();renderAll();
       setTimeout(() => { ov.style.display = 'none'; }, 350);
     };
 
+    const showAuthScreen = () => {
+      const authEl = document.getElementById('auth-screen');
+      if (authEl) authEl.style.display = 'flex';
+    };
+
+    window.hideAuthScreen = () => {
+      const authEl = document.getElementById('auth-screen');
+      if (authEl) authEl.style.display = 'none';
+      hideLoader();
+      if (!userId) setCloudStatus('LOCAL', 'var(--amber)');
+    };
+
     window.hideLoaderManual = () => {
       hideLoader();
       setCloudStatus('LOCAL', 'var(--amber)');
@@ -1224,7 +1276,8 @@ load();renderAll();
     };
 
     const normalizeData = (incoming) => {
-      const safe = incoming && typeof incoming === 'object' ? incoming : {};
+      const raw = incoming && typeof incoming === 'object' ? incoming : {};
+      const safe = typeof window.stripPredefinedSampleData === 'function' ? window.stripPredefinedSampleData(raw) : raw;
       return {
         spools: Array.isArray(safe.spools) ? safe.spools : [],
         prints: Array.isArray(safe.prints) ? safe.prints : [],
@@ -1295,7 +1348,7 @@ load();renderAll();
       }
       try {
         const stateDoc = doc(db, 'artifacts', appId, 'users', userId, 'inventory', 'state');
-        await setDoc(stateDoc, window.D);
+        await setDoc(stateDoc, window.getAppState());
         pendingCloudWrite = false;
         lastSyncAt = Date.now();
         updateSyncMetaUI();
@@ -1319,13 +1372,13 @@ load();renderAll();
         setCloudStatus('CONNECTED', 'var(--green)');
         if (snapshot.exists()) {
           applyingRemote = true;
-          const localNorm = normalizeData(window.D);
+          const localNorm = normalizeData(window.getAppState());
           const localStr = JSON.stringify(localNorm);
-          const merged = mergeState(window.D, snapshot.data());
+          const merged = mergeState(window.getAppState(), snapshot.data());
           const mergedStr = JSON.stringify(merged);
           const remoteStr = JSON.stringify(normalizeData(snapshot.data()));
-          window.D = merged;
-          localStorage.setItem('fs4', JSON.stringify(window.D));
+          window.setAppState(merged);
+          baseSave();
           window.renderAll();
           applyingRemote = false;
           if (mergedStr !== remoteStr) {
@@ -1355,8 +1408,13 @@ load();renderAll();
     window.syncForce = async () => {
       pendingCloudWrite = true;
       updateSyncMetaUI();
+      if (!userId) {
+        setCloudStatus('SIGN IN REQUIRED', 'var(--amber)');
+        showAuthScreen();
+        window.toast('Sign in with Google to sync');
+        return;
+      }
       setCloudStatus('CONNECTING', 'var(--amber)');
-      if (!userId) await initCloud();
       await saveToCloud();
       window.toast('Sync requested');
     };
@@ -1375,6 +1433,65 @@ load();renderAll();
       if (actions) actions.style.display = 'block';
     }, 5000);
 
+    const applySignedInUser = (user) => {
+      if (!user) return;
+      userId = user.uid;
+      if (typeof window.setStorageScope === 'function') window.setStorageScope(user.uid);
+      setCloudStatus('CONNECTED', 'var(--green)');
+      setUserId(user.email || user.uid);
+      window.hideAuthScreen();
+      setupSync();
+      if (pendingCloudWrite) saveToCloud();
+    };
+
+    const applySignedOutUser = () => {
+      userId = null;
+      if (unsubscribeSync) {
+        unsubscribeSync();
+        unsubscribeSync = null;
+      }
+      if (typeof window.setStorageScope === 'function') window.setStorageScope(null);
+      setUserId('Not signed in');
+      setCloudStatus('SIGN IN REQUIRED', 'var(--amber)');
+      showAuthScreen();
+      hideLoader();
+      updateSyncMetaUI();
+    };
+
+    window.signInWithGoogle = async () => {
+      try {
+        if (!auth) await initCloud();
+        setCloudStatus('CONNECTING', 'var(--amber)');
+        await signInWithPopup(auth, googleProvider);
+      } catch (err) {
+        if (err?.code === 'auth/popup-blocked') {
+          try {
+            await signInWithRedirect(auth, googleProvider);
+            return;
+          } catch (redirectErr) {
+            setUserId(`Auth error: ${describeAuthError(redirectErr)}`);
+            setCloudStatus('OFFLINE', 'var(--red)');
+            return;
+          }
+        }
+        setUserId(`Auth error: ${describeAuthError(err)}`);
+        setCloudStatus('OFFLINE', 'var(--red)');
+      }
+    };
+
+    window.logoutCloud = async () => {
+      if (!auth?.currentUser) {
+        applySignedOutUser();
+        return;
+      }
+      try {
+        await signOut(auth);
+        window.toast('Signed out');
+      } catch (err) {
+        window.toast(`Sign-out failed: ${describeAuthError(err)}`);
+      }
+    };
+
     async function initCloud() {
       if (initInProgress) return;
       initInProgress = true;
@@ -1391,29 +1508,32 @@ load();renderAll();
           await setPersistence(auth, inMemoryPersistence);
         }
 
-        onAuthStateChanged(auth, (user) => {
-          if (!user) return;
-          userId = user.uid;
-          setCloudStatus('CONNECTED', 'var(--green)');
-          setUserId(user.uid);
-          setupSync();
-          if (pendingCloudWrite) saveToCloud();
-        });
-
-        const cred = await signInAnonymously(auth);
-        if (cred?.user?.uid) {
-          userId = cred.user.uid;
-          setCloudStatus('CONNECTED', 'var(--green)');
-          setUserId(cred.user.uid);
-          setupSync();
-          if (pendingCloudWrite) saveToCloud();
+        if (!authObserverBound) {
+          onAuthStateChanged(auth, (user) => {
+            if (user) applySignedInUser(user);
+            else applySignedOutUser();
+          });
+          authObserverBound = true;
         }
+
+        try {
+          const redirectResult = await getRedirectResult(auth);
+          if (redirectResult?.user) applySignedInUser(redirectResult.user);
+        } catch (redirectErr) {
+          console.error('Redirect sign-in error:', redirectErr);
+          setUserId(`Auth error: ${describeAuthError(redirectErr)}`);
+        }
+
+        if (auth.currentUser) applySignedInUser(auth.currentUser);
+        else applySignedOutUser();
       } catch (err) {
         console.error('Firebase init error:', err);
         setCloudStatus('OFFLINE', 'var(--red)');
         setUserId(`Auth error: ${describeAuthError(err)}`);
         const status = document.getElementById('loading-status');
         if (status) status.textContent = 'Cloud unavailable. Using local storage.';
+        const actions = document.getElementById('loading-actions');
+        if (actions) actions.style.display = 'block';
         setTimeout(() => hideLoader(), 1200);
       } finally {
         initInProgress = false;
