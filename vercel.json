@@ -1,10 +1,10 @@
 {
   "version": 2,
-  "cleanUrls": true,
+  "cleanUrls": false,
   "trailingSlash": false,
   "rewrites": [
     {
-      "source": "/",
+      "source": "/(.*)",
       "destination": "/filaspool-v2.html"
     }
   ],
